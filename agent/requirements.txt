@@ -1,0 +1,5 @@
+livekit-agents[codecs]~=1.4
+livekit-plugins-deepgram~=1.4
+livekit-plugins-openai~=1.4
+livekit-plugins-silero~=1.4
+python-dotenv>=1.0
