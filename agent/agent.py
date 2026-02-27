@@ -1294,8 +1294,11 @@ async def entrypoint(ctx: JobContext):
         try:
             metadata = json.loads(ctx.room.metadata)
             employee_id = metadata.get("employee_id", DEFAULT_EMPLOYEE_ID)
+            lang = metadata.get("lang", "en")
+            logger.info(f"Language: {lang}")
         except (json.JSONDecodeError, TypeError):
             pass
+    lang = locals().get("lang", "en")
     set_current_employee_id(employee_id)
 
     session = AgentSession(
@@ -1327,9 +1330,8 @@ async def entrypoint(ctx: JobContext):
     await session.start(room=ctx.room, agent=TaliqAgent())
     emp = db.get_employee(get_current_employee_id_from_context())
     name = emp["name"].split()[0] if emp else "there"
-    await session.say(
-        f"Ahlan {name}! I'm Taliq. How can I help?", allow_interruptions=True
-    )
+    greeting = f"أهلاً {name}! أنا تليق، مساعدك الصوتي. كيف أقدر أساعدك؟" if lang == "ar" else f"Ahlan {name}! I'm Taliq. How can I help?"
+    await session.say(greeting, allow_interruptions=True)
     
     # Auto-show dashboard on connect
     try:

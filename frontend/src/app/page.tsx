@@ -6,6 +6,8 @@ import { VoiceAgent } from "@/components/VoiceAgent";
 import { GenerativePanel } from "@/components/GenerativePanel";
 import { LoginPage } from "@/components/LoginPage";
 import { fetchToken } from "@/lib/livekit-config";
+import { Lang, t, getSavedLang, saveLang, isRTL } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 interface AuthEmployee {
   id: string;
@@ -34,6 +36,7 @@ export default function Home() {
   const [error, setError] = useState<string>("");
   const [roomName] = useState(() => `taliq-${Date.now()}`);
   const [authChecked, setAuthChecked] = useState(false);
+  const [lang, setLang] = useState<Lang>("en");
 
   // Check localStorage for existing session
   useEffect(() => {
@@ -44,6 +47,9 @@ export default function Home() {
       }
     } catch { /* ignore */ }
     setAuthChecked(true);
+    const savedLang = getSavedLang();
+    setLang(savedLang);
+    if (isRTL(savedLang)) { document.documentElement.dir = "rtl"; document.documentElement.lang = "ar"; }
   }, []);
 
   // Fetch token once employee is set
@@ -55,8 +61,8 @@ export default function Home() {
       setError("");
       try {
         const identity = `${employee!.id}-${Date.now()}`;
-        const { token: t } = await fetchToken(roomName, identity, employee!.id);
-        setToken(t);
+        const resp = await fetchToken(roomName, identity, employee!.id, lang);
+        setToken(resp.token);
       } catch {
         setError("Failed to connect to Taliq");
       } finally {
@@ -152,6 +158,8 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-2">
+            <LanguageSwitcher lang={lang} onSwitch={(l) => { setLang(l); document.documentElement.dir = isRTL(l) ? "rtl" : "ltr"; }} />
+
             {/* Manager badge */}
             {employee.isManager && (
               <span className="px-2 py-1 rounded-lg bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
