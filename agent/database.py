@@ -660,7 +660,7 @@ def get_document_requests(emp_id: str) -> list[dict]:
 def get_employee_loans(emp_id: str) -> list[dict]:
     conn = get_db()
     rows = conn.execute(
-        "SELECT * FROM loans WHERE employee_id = ? AND status = 'active' ORDER BY created_at DESC",
+        "SELECT * FROM loans WHERE employee_id = ? AND status IN ('active', 'pending') ORDER BY created_at DESC",
         (emp_id,),
     ).fetchall()
     conn.close()
@@ -1647,6 +1647,28 @@ def get_leave_analytics(manager_id: str) -> dict:
     
     conn.close()
     return {"total_requests": total, "by_type": by_type, "by_status": by_status}
+
+
+def get_employee_all_requests(emp_id: str) -> dict:
+    """Get ALL requests for an employee across all categories."""
+    return {
+        "leave_requests": get_leave_requests(emp_id),
+        "loans": get_employee_loans(emp_id),
+        "documents": get_document_requests(emp_id),
+        "travel": get_travel_requests(emp_id),
+        "grievances": get_my_grievances(emp_id),
+    }
+
+
+def get_travel_requests(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM travel_requests WHERE employee_id = ? ORDER BY created_at DESC",
+        (emp_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
 
 # Auto-init on import
 init_db()

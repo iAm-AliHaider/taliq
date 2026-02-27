@@ -100,6 +100,9 @@ GRIEVANCE:
 NOTIFICATIONS:
 - "Show notifications" -> show_notifications
 
+ALL REQUESTS:
+- "Show my requests" / "What are my requests" / "My status" -> show_my_requests (shows ALL requests at once)
+
 MANAGER TOOLS (only for managers E002, E003, E005):
 Approval actions:
 - "Show all pending" -> show_all_pending_approvals (shows ALL pending items at once)
@@ -679,6 +682,55 @@ async def create_travel_request(
         "main_card",
     )
     return f"Travel {tr['ref']} created! {destination}, {days} days, {tr['total_allowance']:,} SAR."
+
+
+
+@function_tool
+async def show_my_requests(context: RunContext):
+    """Show ALL of the employee's requests across all categories - leaves, loans, documents, travel, grievances."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Employee not found."
+    
+    leaves = db.get_leave_requests(emp_id)
+    loans = db.get_employee_loans(emp_id)
+    docs = db.get_document_requests(emp_id)
+    travel = db.get_travel_requests(emp_id)
+    grievances = db.get_my_grievances(emp_id)
+    
+    await _send_ui("MyRequestsCard", {
+        "employeeName": emp["name"],
+        "leaveRequests": [{
+            "ref": r["ref"], "type": r["leave_type"], "days": r["days"],
+            "startDate": r["start_date"], "status": r["status"],
+        } for r in leaves],
+        "loans": [{
+            "ref": r["ref"], "type": r["loan_type"], "amount": r["amount"],
+            "remaining": r["remaining"], "status": r["status"],
+        } for r in loans],
+        "documents": [{
+            "ref": r["ref"], "type": r["document_type"], "status": r["status"],
+        } for r in docs],
+        "travel": [{
+            "ref": r["ref"], "destination": r["destination"], "days": r["days"],
+            "status": r["status"],
+        } for r in travel],
+        "grievances": [{
+            "ref": r["ref"], "subject": r["subject"], "status": r["status"],
+        } for r in grievances],
+    }, "my_requests")
+    
+    parts = []
+    if leaves: parts.append(f"{len(leaves)} leave requests")
+    if loans: parts.append(f"{len(loans)} loans")
+    if docs: parts.append(f"{len(docs)} documents")
+    if travel: parts.append(f"{len(travel)} travel requests")
+    if grievances: parts.append(f"{len(grievances)} grievances")
+    
+    if not parts:
+        return "You have no active requests."
+    return f"You have: {', '.join(parts)}."
 
 
 # ---- MANAGER TOOLS ----
@@ -1650,6 +1702,8 @@ ALL_TOOLS = [
     show_my_grievances,
     # Notifications
     show_notifications,
+    # All Requests
+    show_my_requests,
     # Manager - Basic
     show_team_overview,
     show_department_stats,

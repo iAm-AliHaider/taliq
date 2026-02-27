@@ -37,6 +37,7 @@ import TeamTrainingCard from "./taliq/TeamTrainingCard";
 import EmployeeDetailCard from "./taliq/EmployeeDetailCard";
 import LeaveAnalyticsCard from "./taliq/LeaveAnalyticsCard";
 import HeadcountCard from "./taliq/HeadcountCard";
+import MyRequestsCard from "./taliq/MyRequestsCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
