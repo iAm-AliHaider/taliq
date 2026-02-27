@@ -8,12 +8,23 @@ interface Props {
   onQuickAction?: (text: string) => void;
 }
 
-// Simple SVG icons as components - no emoji needed
 function MicIcon({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function MicOffIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .49-.05.97-.16 1.43" />
       <line x1="12" y1="19" x2="12" y2="23" />
       <line x1="8" y1="23" x2="16" y2="23" />
     </svg>
@@ -74,12 +85,19 @@ export function VoiceAgent({ onQuickAction }: Props) {
   const [transcript, setTranscript] = useState<Array<{ role: "user" | "agent"; text: string; ts: number }>>([]);
   const [expanded, setExpanded] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const touchActiveRef = useRef(false);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const isListening = agentState === "listening" && !isMuted;
   const isSpeaking = agentState === "speaking";
   const isThinking = agentState === "thinking";
+
+  // Detect touch device
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  }, []);
 
   // Mute mic on connect (push-to-talk default)
   useEffect(() => {
@@ -120,23 +138,40 @@ export function VoiceAgent({ onQuickAction }: Props) {
     return () => { room.off("transcriptionReceived", handleTranscription); };
   }, [room]);
 
-  const startListening = useCallback(() => {
+  const unmuteMic = useCallback(() => {
     if (!room?.localParticipant) return;
     const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
     if (micPub) { micPub.unmute(); setIsMuted(false); }
   }, [room]);
 
-  const stopListening = useCallback(() => {
+  const muteMic = useCallback(() => {
     if (!room?.localParticipant) return;
+    // Small delay so VAD catches the last words
     setTimeout(() => {
       const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
       if (micPub) { micPub.mute(); setIsMuted(true); }
-    }, 300);
+    }, 400);
   }, [room]);
 
-  const toggleMic = useCallback(() => {
-    if (isMuted) startListening(); else stopListening();
-  }, [isMuted, startListening, stopListening]);
+  // Touch handlers (push-to-talk: hold to speak)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    touchActiveRef.current = true;
+    unmuteMic();
+  }, [unmuteMic]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    touchActiveRef.current = false;
+    muteMic();
+  }, [muteMic]);
+
+  // Click handler (desktop: toggle mic)
+  const handleClick = useCallback(() => {
+    // On touch devices, touch events handle it — skip click
+    if (isTouchDevice) return;
+    if (isMuted) unmuteMic(); else muteMic();
+  }, [isTouchDevice, isMuted, unmuteMic, muteMic]);
 
   const sendTextToAgent = useCallback(async (text: string) => {
     if (!room?.localParticipant) return;
@@ -168,7 +203,15 @@ export function VoiceAgent({ onQuickAction }: Props) {
     ? "bg-gradient-to-br from-blue-400 to-blue-500 shadow-blue-500/30"
     : "bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20";
 
-  const statusText = !isConnected ? "Connecting..." : isSpeaking ? "Speaking..." : isListening ? "Listening - tap to stop" : isThinking ? "Thinking..." : "Tap to speak";
+  const statusText = !isConnected
+    ? "Connecting..."
+    : isSpeaking
+    ? "Speaking..."
+    : isListening
+    ? isTouchDevice ? "Release to send" : "Listening - click to stop"
+    : isThinking
+    ? "Thinking..."
+    : isTouchDevice ? "Hold to speak" : "Click to speak";
 
   return (
     <>
@@ -243,7 +286,7 @@ export function VoiceAgent({ onQuickAction }: Props) {
             <p className={`text-[11px] font-medium ${
               isSpeaking ? "text-emerald-600" : isListening ? "text-red-500" : "text-blue-500"
             }`}>
-              {isSpeaking ? "Speaking..." : isListening ? "Listening..." : "Thinking..."}
+              {statusText}
             </p>
           </div>
         )}
@@ -251,7 +294,7 @@ export function VoiceAgent({ onQuickAction }: Props) {
         {/* Hint on first load */}
         {isConnected && !isSpeaking && !isListening && !isThinking && transcript.length === 0 && (
           <div className="px-3 py-1.5 rounded-full bg-white shadow-lg border border-gray-100 animate-slide-up">
-            <p className="text-[11px] text-gray-500">Tap to speak</p>
+            <p className="text-[11px] text-gray-500">{isTouchDevice ? "Hold to speak" : "Click to speak"}</p>
           </div>
         )}
 
@@ -269,11 +312,12 @@ export function VoiceAgent({ onQuickAction }: Props) {
 
           {/* Main orb - push to talk */}
           <button
-            onClick={toggleMic}
-            onTouchStart={(e) => { e.preventDefault(); startListening(); }}
-            onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+            onClick={handleClick}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
             disabled={!isConnected}
-            className={`relative w-16 h-16 rounded-full ${orbBg} shadow-xl flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50`}
+            className={`relative w-16 h-16 rounded-full ${orbBg} shadow-xl flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50 select-none touch-none`}
           >
             {/* Pulse rings when active */}
             {(isListening || isSpeaking) && (
@@ -300,6 +344,8 @@ export function VoiceAgent({ onQuickAction }: Props) {
             <div className="relative z-10">
               {isSpeaking
                 ? <SpeakerIcon className="w-6 h-6 text-white" />
+                : isMuted
+                ? <MicOffIcon className="w-6 h-6 text-white" />
                 : <MicIcon className="w-6 h-6 text-white" />
               }
             </div>
