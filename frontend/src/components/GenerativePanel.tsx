@@ -31,6 +31,13 @@ import { MyTrainingsCard } from "./taliq/MyTrainingsCard";
 import { GrievanceListCard } from "./taliq/GrievanceListCard";
 import { NotificationCard } from "./taliq/NotificationCard";
 
+import ManagerPendingCard from "./taliq/ManagerPendingCard";
+import TeamPerformanceCard from "./taliq/TeamPerformanceCard";
+import TeamTrainingCard from "./taliq/TeamTrainingCard";
+import EmployeeDetailCard from "./taliq/EmployeeDetailCard";
+import LeaveAnalyticsCard from "./taliq/LeaveAnalyticsCard";
+import HeadcountCard from "./taliq/HeadcountCard";
+
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
   LeaveRequestForm,
@@ -60,6 +67,12 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   MyTrainingsCard,
   GrievanceListCard,
   NotificationCard,
+  ManagerPendingCard,
+  TeamPerformanceCard,
+  TeamTrainingCard,
+  EmployeeDetailCard,
+  LeaveAnalyticsCard,
+  HeadcountCard,
 };
 
 interface Props {

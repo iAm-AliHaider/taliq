@@ -23,6 +23,7 @@ from livekit.plugins import deepgram, openai, silero
 from livekit import rtc
 
 import database as db
+from edge_tts_plugin import EdgeTTS
 
 load_dotenv()
 logger = logging.getLogger("taliq-agent")
@@ -98,6 +99,32 @@ GRIEVANCE:
 
 NOTIFICATIONS:
 - "Show notifications" -> show_notifications
+
+MANAGER TOOLS (only for managers E002, E003, E005):
+Approval actions:
+- "Show all pending" -> show_all_pending_approvals (shows ALL pending items at once)
+- "Approve leave LR-xxx" -> approve_leave (ref, decision)
+- "Approve loan LN-xxx" -> approve_loan_request (ref, decision)
+- "Approve travel TR-xxx" -> approve_travel_request (ref, decision)
+- "Approve overtime" -> approve_overtime_request (record_id, decision)
+- "Approve document DOC-xxx" -> approve_document_request (ref, decision)
+Use decision='approved'/'rejected' (or 'ready'/'rejected' for docs).
+
+Team Analytics:
+- "Show team performance" -> show_team_performance
+- "Training compliance" -> show_team_training_compliance
+- "Leave analytics" -> show_leave_analytics
+- "Headcount report" -> show_headcount_report
+
+Grievance Management:
+- "Team grievances" -> show_team_grievances
+- "Resolve grievance GRV-xxx" -> resolve_team_grievance (ref, resolution)
+
+Team Administration:
+- "Show employee details E001" -> show_employee_details (full 360 view)
+- "Reassign employee" -> reassign_team_member (employee_id, new_manager_id)
+
+When a manager logs in, proactively mention pending items count.
 """
 
 
@@ -1149,6 +1176,428 @@ async def show_notifications(context: RunContext):
 
 # ---- AGENT TOOLS LIST ----
 
+# ── Manager: Comprehensive Approval Tools ───────────────
+
+@function_tool
+async def approve_loan_request(
+    context: RunContext,
+    reference: str = "",
+    decision: str = "approved",
+):
+    """Approve or reject a pending loan request. decision: 'approved' or 'rejected'. Gets the ref from pending list."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not reference:
+        # Show pending loans
+        pending = db.get_pending_loan_requests(emp_id)
+        if not pending:
+            return "No pending loan requests."
+        items = []
+        for p in pending:
+            items.append(f"{p['ref']}: {p['employee_name']} - {p['loan_type']} for {p['amount']:,.0f} SAR ({p['installments_left']} months)")
+        return f"Pending loan requests:\n" + "\n".join(items) + "\nSay which one to approve or reject."
+    
+    result = db.approve_loan(reference, decision)
+    if result:
+        await _send_ui("StatusBanner", {
+            "message": f"Loan {reference} {decision}: {result['employee_name']} - {result['amount']:,.0f} SAR",
+            "type": "success" if decision == "approved" else "warning",
+        }, f"loan_approval_{reference}")
+        return f"Loan {reference} has been {decision}."
+    return f"Loan {reference} not found or already processed."
+
+
+@function_tool
+async def approve_travel_request(
+    context: RunContext,
+    reference: str = "",
+    decision: str = "approved",
+):
+    """Approve or reject a travel request."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not reference:
+        pending = db.get_pending_travel_requests(emp_id)
+        if not pending:
+            return "No pending travel requests."
+        items = []
+        for p in pending:
+            items.append(f"{p['ref']}: {p['employee_name']} to {p['destination']} ({p['days']} days, {p['total_allowance']:,.0f} SAR)")
+        return f"Pending travel requests:\n" + "\n".join(items)
+    
+    result = db.approve_travel(reference, decision)
+    if result:
+        await _send_ui("StatusBanner", {
+            "message": f"Travel {reference} {decision}: {result['employee_name']} to {result['destination']}",
+            "type": "success" if decision == "approved" else "warning",
+        }, f"travel_approval_{reference}")
+        return f"Travel request {reference} has been {decision}."
+    return f"Travel request {reference} not found."
+
+
+@function_tool
+async def approve_overtime_request(
+    context: RunContext,
+    record_id: int = 0,
+    decision: str = "approved",
+):
+    """Approve or reject an overtime request."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not record_id:
+        pending = db.get_pending_overtime_requests(emp_id)
+        if not pending:
+            return "No pending overtime requests."
+        items = []
+        for p in pending:
+            items.append(f"ID {p['id']}: {p['employee_name']} - {p['overtime_hours']}h on {p['date']} ({p.get('notes', 'No reason')})")
+        return f"Pending overtime requests:\n" + "\n".join(items)
+    
+    result = db.approve_overtime(record_id, decision)
+    if result:
+        await _send_ui("StatusBanner", {
+            "message": f"Overtime {decision}: {result['employee_name']} - {result['overtime_hours']}h on {result['date']}",
+            "type": "success" if decision == "approved" else "warning",
+        }, f"ot_approval_{record_id}")
+        return f"Overtime request {decision}."
+    return "Overtime request not found."
+
+
+@function_tool
+async def approve_document_request(
+    context: RunContext,
+    reference: str = "",
+    decision: str = "ready",
+):
+    """Approve a document request. decision: 'ready' (approved) or 'rejected'."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not reference:
+        pending = db.get_pending_document_requests(emp_id)
+        if not pending:
+            return "No pending document requests."
+        items = []
+        for p in pending:
+            items.append(f"{p['ref']}: {p['employee_name']} - {p['document_type']} (status: {p['status']})")
+        return f"Pending document requests:\n" + "\n".join(items)
+    
+    result = db.approve_document(reference, decision)
+    if result:
+        await _send_ui("StatusBanner", {
+            "message": f"Document {reference} {decision}: {result['employee_name']} - {result['document_type']}",
+            "type": "success",
+        }, f"doc_approval_{reference}")
+        return f"Document request {reference} marked as {decision}."
+    return f"Document request {reference} not found."
+
+
+# ── Manager: Grievance Management ───────────────────────
+
+@function_tool
+async def show_team_grievances(context: RunContext):
+    """Show all grievances from team members. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    grievances = db.get_department_grievances(emp_id)
+    if not grievances:
+        return "No grievances from your team."
+    
+    await _send_ui("GrievanceListCard", {
+        "grievances": [{
+            "ref": g["ref"],
+            "category": g["category"],
+            "subject": g["subject"],
+            "severity": g["severity"],
+            "status": g["status"],
+            "employeeName": g.get("employee_name", "Unknown"),
+            "submittedAt": g["submitted_at"],
+        } for g in grievances],
+        "isManager": True,
+    }, "team_grievances")
+    
+    return f"Found {len(grievances)} grievances from your team."
+
+
+@function_tool
+async def resolve_team_grievance(
+    context: RunContext,
+    reference: str = "",
+    resolution: str = "",
+):
+    """Resolve a grievance with a resolution note. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not reference or not resolution:
+        return "Please provide the grievance reference and resolution."
+    
+    result = db.resolve_grievance(reference, resolution)
+    if result and "error" not in result:
+        await _send_ui("StatusBanner", {
+            "message": f"Grievance {reference} resolved",
+            "type": "success",
+        }, f"grievance_resolved_{reference}")
+        return f"Grievance {reference} has been resolved."
+    return f"Could not resolve grievance {reference}."
+
+
+# ── Manager: Team Analytics ─────────────────────────────
+
+@function_tool
+async def show_team_performance(context: RunContext):
+    """Show performance summary for all direct reports. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    summary = db.get_team_performance_summary(emp_id)
+    if not summary:
+        return "No direct reports found."
+    
+    await _send_ui("TeamPerformanceCard", {
+        "employees": [{
+            "employeeId": s["employee_id"],
+            "name": s["name"],
+            "position": s["position"],
+            "rating": s["latest_rating"],
+            "reviewPeriod": s["review_period"],
+            "goalsTotal": s["goals_total"],
+            "goalsCompleted": s["goals_completed"],
+            "trainingsEnrolled": s["trainings_enrolled"],
+            "trainingsCompleted": s["trainings_completed"],
+            "attendanceDays": s["attendance_days"],
+            "attendancePresent": s["attendance_present"],
+        } for s in summary],
+    }, "team_performance")
+    
+    return f"Performance summary for {len(summary)} team members."
+
+
+@function_tool
+async def show_team_training_compliance(context: RunContext):
+    """Show training compliance for all direct reports. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    compliance = db.get_team_training_compliance(emp_id)
+    if not compliance:
+        return "No direct reports found."
+    
+    await _send_ui("TeamTrainingCard", {
+        "employees": [{
+            "employeeId": c["employee_id"],
+            "name": c["name"],
+            "position": c["position"],
+            "totalEnrolled": c["total_enrolled"],
+            "completed": c["completed"],
+            "mandatoryTotal": c["mandatory_total"],
+            "mandatoryCompleted": c["mandatory_completed"],
+            "compliance": c["compliance"],
+        } for c in compliance],
+    }, "team_training")
+    
+    return f"Training compliance for {len(compliance)} team members."
+
+
+@function_tool
+async def show_all_pending_approvals(context: RunContext):
+    """Show ALL pending items across all categories. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    all_pending = db.get_all_pending_for_manager(emp_id)
+    
+    counts = {k: len(v) for k, v in all_pending.items()}
+    total = sum(counts.values())
+    
+    await _send_ui("ManagerPendingCard", {
+        "leaveRequests": [{
+            "ref": r["ref"], "employeeName": r["employee_name"],
+            "leaveType": r["leave_type"], "days": r["days"],
+            "startDate": r["start_date"], "reason": r.get("reason", ""),
+        } for r in all_pending["leave_requests"]],
+        "loanRequests": [{
+            "ref": r["ref"], "employeeName": r["employee_name"],
+            "loanType": r["loan_type"], "amount": r["amount"],
+            "installments": r["installments_left"],
+        } for r in all_pending["loan_requests"]],
+        "travelRequests": [{
+            "ref": r["ref"], "employeeName": r["employee_name"],
+            "destination": r["destination"], "days": r["days"],
+            "allowance": r["total_allowance"],
+        } for r in all_pending["travel_requests"]],
+        "overtimeRequests": [{
+            "id": r["id"], "employeeName": r["employee_name"],
+            "hours": r["overtime_hours"], "date": r["date"],
+            "reason": r.get("notes", ""),
+        } for r in all_pending["overtime_requests"]],
+        "documentRequests": [{
+            "ref": r["ref"], "employeeName": r["employee_name"],
+            "documentType": r["document_type"], "status": r["status"],
+        } for r in all_pending["document_requests"]],
+        "grievances": [{
+            "ref": r["ref"], "employeeName": r.get("employee_name", ""),
+            "category": r["category"], "severity": r["severity"],
+            "subject": r["subject"],
+        } for r in all_pending["grievances"]],
+        "pendingReviews": [{
+            "employeeId": r["id"], "name": r["name"],
+            "position": r["position"],
+        } for r in all_pending["pending_reviews"]],
+        "counts": counts,
+        "total": total,
+    }, "all_pending")
+    
+    summary_parts = []
+    if counts["leave_requests"]: summary_parts.append(f"{counts['leave_requests']} leave")
+    if counts["loan_requests"]: summary_parts.append(f"{counts['loan_requests']} loan")
+    if counts["travel_requests"]: summary_parts.append(f"{counts['travel_requests']} travel")
+    if counts["overtime_requests"]: summary_parts.append(f"{counts['overtime_requests']} overtime")
+    if counts["document_requests"]: summary_parts.append(f"{counts['document_requests']} document")
+    if counts["grievances"]: summary_parts.append(f"{counts['grievances']} grievance")
+    if counts["pending_reviews"]: summary_parts.append(f"{counts['pending_reviews']} review")
+    
+    if total == 0:
+        return "All clear! No pending items."
+    return f"You have {total} pending items: {', '.join(summary_parts)}."
+
+
+@function_tool
+async def show_leave_analytics(context: RunContext):
+    """Show leave analytics for your team. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    analytics = db.get_leave_analytics(emp_id)
+    
+    await _send_ui("LeaveAnalyticsCard", {
+        "totalRequests": analytics["total_requests"],
+        "byType": analytics["by_type"],
+        "byStatus": analytics["by_status"],
+    }, "leave_analytics")
+    
+    return f"Leave analytics: {analytics['total_requests']} total requests."
+
+
+@function_tool
+async def show_headcount_report(context: RunContext):
+    """Show headcount breakdown by department. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    breakdown = db.get_headcount_by_department()
+    total = sum(d["count"] for d in breakdown)
+    
+    await _send_ui("HeadcountCard", {
+        "departments": [{
+            "department": d["department"],
+            "count": d["count"],
+            "percentage": round(d["count"] / total * 100) if total > 0 else 0,
+        } for d in breakdown],
+        "total": total,
+    }, "headcount")
+    
+    return f"Total headcount: {total} across {len(breakdown)} departments."
+
+
+@function_tool
+async def reassign_team_member(
+    context: RunContext,
+    employee_id: str = "",
+    new_manager_id: str = "",
+):
+    """Reassign an employee to a different manager. Manager only."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You don't have manager access."
+    
+    if not employee_id or not new_manager_id:
+        reports = db.get_direct_reports(emp_id)
+        all_mgrs = [e for e in db.get_all_employees_summary() if db.is_manager(e["id"])]
+        report_list = ", ".join(f"{r['id']} ({r['name']})" for r in reports)
+        mgr_list = ", ".join(f"{m['id']} ({m['name']})" for m in all_mgrs)
+        return f"Your reports: {report_list}. Available managers: {mgr_list}. Specify employee_id and new_manager_id."
+    
+    result = db.reassign_employee(employee_id, new_manager_id)
+    if "error" not in result:
+        new_mgr = db.get_employee(new_manager_id)
+        await _send_ui("StatusBanner", {
+            "message": f"{result['name']} reassigned to {new_mgr['name'] if new_mgr else new_manager_id}",
+            "type": "success",
+        }, "reassignment")
+        return f"{result['name']} has been reassigned to {new_mgr['name'] if new_mgr else new_manager_id}."
+    return result.get("error", "Failed to reassign.")
+
+
+@function_tool
+async def show_employee_details(
+    context: RunContext,
+    employee_id: str = "",
+):
+    """View full details of a team member. Manager only."""
+    mgr_id = get_current_employee_id_from_context()
+    if not db.is_manager(mgr_id):
+        return "You don't have manager access."
+    
+    if not employee_id:
+        reports = db.get_direct_reports(mgr_id)
+        return "Your team: " + ", ".join(f"{r['id']} ({r['name']})" for r in reports) + ". Which employee?"
+    
+    emp = db.get_employee(employee_id)
+    if not emp:
+        return f"Employee {employee_id} not found."
+    
+    # Get comprehensive data
+    leaves = db.get_leave_requests(employee_id)
+    loans = db.get_employee_loans(employee_id)
+    reviews = db.get_employee_reviews(employee_id)
+    goals = db.get_goals(employee_id)
+    trainings = db.get_my_trainings(employee_id)
+    grievances = db.get_my_grievances(employee_id)
+    training_stats = db.get_training_stats(employee_id)
+    
+    await _send_ui("EmployeeDetailCard", {
+        "employee": {
+            "id": emp["id"], "name": emp["name"], "nameAr": emp.get("name_ar"),
+            "position": emp["position"], "department": emp["department"],
+            "email": emp.get("email"), "phone": emp.get("phone"),
+            "joinDate": emp["join_date"], "grade": emp.get("grade"),
+            "nationality": emp.get("nationality"),
+            "salary": emp["salary"], "leaveBalance": emp["leave_balance"],
+        },
+        "leaveRequests": len(leaves),
+        "pendingLeaves": len([l for l in leaves if l["status"] == "pending"]),
+        "activeLoans": len(loans),
+        "loanBalance": sum(l.get("remaining", 0) for l in loans),
+        "reviews": [{
+            "period": r["period"], "rating": r["rating"],
+        } for r in reviews[:3]],
+        "goalsTotal": len(goals),
+        "goalsCompleted": len([g for g in goals if g["status"] == "completed"]),
+        "trainingCompliance": training_stats["compliance"],
+        "trainingsCompleted": training_stats["completed"],
+        "grievanceCount": len(grievances),
+        "openGrievances": len([g for g in grievances if g["status"] not in ("resolved", "closed")]),
+    }, f"employee_detail_{employee_id}")
+    
+    return f"Showing full details for {emp['name']}."
+
+
 ALL_TOOLS = [
     # Dashboard
     show_dashboard,
@@ -1201,17 +1650,45 @@ ALL_TOOLS = [
     show_my_grievances,
     # Notifications
     show_notifications,
-    # Manager
+    # Manager - Basic
     show_team_overview,
     show_department_stats,
     show_leave_calendar,
+    # Manager - Approvals
+    approve_loan_request,
+    approve_travel_request,
+    approve_overtime_request,
+    approve_document_request,
+    # Manager - Grievance
+    show_team_grievances,
+    resolve_team_grievance,
+    # Manager - Analytics
+    show_team_performance,
+    show_team_training_compliance,
+    show_all_pending_approvals,
+    show_leave_analytics,
+    show_headcount_report,
+    # Manager - Administration
+    reassign_team_member,
+    show_employee_details,
 ]
+
+MANAGER_ONLY_TOOLS = {
+    "show_team_overview", "show_department_stats", "show_leave_calendar",
+    "create_performance_review",
+    "approve_loan_request", "approve_travel_request", "approve_overtime_request",
+    "approve_document_request",
+    "show_team_grievances", "resolve_team_grievance",
+    "show_team_performance", "show_team_training_compliance",
+    "show_all_pending_approvals", "show_leave_analytics", "show_headcount_report",
+    "reassign_team_member", "show_employee_details",
+}
 
 
 def get_tools_for_employee(emp_id: str):
     tools = list(ALL_TOOLS)
     if not db.is_manager(emp_id):
-        tools = [t for t in tools if t.__name__ not in ("show_team_overview", "show_department_stats", "show_leave_calendar", "create_performance_review")]
+        tools = [t for t in tools if t.__name__ not in MANAGER_ONLY_TOOLS]
     return tools
 
 
@@ -1278,6 +1755,8 @@ async def _handle_data(data: rtc.DataPacket):
         logger.error(f"Reply error: {e}")
 
 
+
+
 async def entrypoint(ctx: JobContext):
     global _room_ref, _session_ref
     logger.info("Entrypoint starting...")
@@ -1309,7 +1788,7 @@ async def entrypoint(ctx: JobContext):
         ),
         stt=deepgram.STT(model="nova-3", language="ar" if lang == "ar" else "en"),
         llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(
+        tts=EdgeTTS(voice="ar-SA-HamedNeural") if lang == "ar" else openai.TTS(
             model="speaches-ai/Kokoro-82M-v1.0-ONNX",
             voice="af_heart",
             base_url=os.getenv("SPEACHES_URL", "http://localhost:8000") + "/v1",

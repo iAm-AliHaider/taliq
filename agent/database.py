@@ -415,12 +415,12 @@ def _seed_data(c):
 
     # Seed loans
     c.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left) VALUES (?,?,?,?,?,?,?)",
-        ("LN-2026-001", "E001", "Interest-Free", 24000, 16000, 2000, 8),
+        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
+        ("LN-2026-001", "E001", "Interest-Free", 24000, 16000, 2000, 8, "active"),
     )
     c.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left) VALUES (?,?,?,?,?,?,?)",
-        ("LN-2026-002", "E004", "Advance Salary", 10000, 5000, 2500, 2),
+        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
+        ("LN-2026-002", "E004", "Advance Salary", 10000, 5000, 2500, 2, "active"),
     )
 
     # Seed announcements
@@ -699,8 +699,8 @@ def create_loan(emp_id: str, loan_type: str, amount: float, months: int) -> dict
     ref = f"LN-2026-{count + 1:03d}"
     monthly = round(amount / months, 2)
     conn.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left) VALUES (?,?,?,?,?,?,?)",
-        (ref, emp_id, loan_type, amount, amount, monthly, months),
+        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
+        (ref, emp_id, loan_type, amount, amount, monthly, months, "pending"),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM loans WHERE ref = ?", (ref,)).fetchone()
@@ -1363,6 +1363,290 @@ def mark_notification_read(notif_id: int) -> dict:
     conn.close()
     return {"ok": True}
 
+
+
+
+# -- Manager: Loan Approvals -----------------------------
+
+def get_pending_loan_requests(manager_id: str) -> list[dict]:
+    """Get pending loan requests from direct reports."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT l.*, e.name as employee_name, e.position, e.department, e.basic_salary
+           FROM loans l JOIN employees e ON l.employee_id = e.id 
+           WHERE e.manager_id = ? AND l.status = 'pending'
+           ORDER BY l.created_at DESC""",
+        (manager_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def approve_loan(ref: str, decision: str, notes: str = "") -> dict | None:
+    """Approve or reject a loan. decision: 'approved' or 'rejected'."""
+    conn = get_db()
+    conn.execute(
+        "UPDATE loans SET status = ? WHERE ref = ? AND status = 'pending'",
+        (decision, ref)
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT l.*, e.name as employee_name FROM loans l JOIN employees e ON l.employee_id = e.id WHERE l.ref = ?",
+        (ref,)
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        # Notify employee
+        create_notification(d["employee_id"], "loan", 
+            f"Loan {decision.title()}", 
+            f"Your loan request {ref} for {d['amount']:,.0f} SAR has been {decision}.")
+        return d
+    return None
+
+
+# -- Manager: Travel Approvals ---------------------------
+
+def get_pending_travel_requests(manager_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT t.*, e.name as employee_name, e.position, e.department
+           FROM travel_requests t JOIN employees e ON t.employee_id = e.id
+           WHERE e.manager_id = ? AND t.status = 'pending'
+           ORDER BY t.created_at DESC""",
+        (manager_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def approve_travel(ref: str, decision: str) -> dict | None:
+    conn = get_db()
+    conn.execute("UPDATE travel_requests SET status = ? WHERE ref = ? AND status = 'pending'", (decision, ref))
+    conn.commit()
+    row = conn.execute(
+        "SELECT t.*, e.name as employee_name FROM travel_requests t JOIN employees e ON t.employee_id = e.id WHERE t.ref = ?",
+        (ref,)
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        create_notification(d["employee_id"], "travel",
+            f"Travel {decision.title()}",
+            f"Your travel request {ref} to {d['destination']} has been {decision}.")
+        return d
+    return None
+
+
+# -- Manager: Overtime Approvals -------------------------
+
+def get_pending_overtime_requests(manager_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT a.*, e.name as employee_name, e.position
+           FROM attendance_records a JOIN employees e ON a.employee_id = e.id
+           WHERE e.manager_id = ? AND a.overtime_status = 'pending'
+           ORDER BY a.date DESC""",
+        (manager_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def approve_overtime(record_id: int, decision: str) -> dict | None:
+    conn = get_db()
+    conn.execute("UPDATE attendance_records SET overtime_status = ? WHERE id = ?", (decision, record_id))
+    conn.commit()
+    row = conn.execute(
+        "SELECT a.*, e.name as employee_name FROM attendance_records a JOIN employees e ON a.employee_id = e.id WHERE a.id = ?",
+        (record_id,)
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        create_notification(d["employee_id"], "attendance",
+            f"Overtime {decision.title()}",
+            f"Your overtime request for {d['overtime_hours']}h on {d['date']} has been {decision}.")
+        return d
+    return None
+
+
+# -- Manager: Document Approvals -------------------------
+
+def get_pending_document_requests(manager_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT d.*, e.name as employee_name, e.position
+           FROM document_requests d JOIN employees e ON d.employee_id = e.id
+           WHERE e.manager_id = ? AND d.status IN ('requested', 'processing')
+           ORDER BY d.created_at DESC""",
+        (manager_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def approve_document(ref: str, decision: str) -> dict | None:
+    """decision: 'ready' (approved) or 'rejected'."""
+    conn = get_db()
+    conn.execute("UPDATE document_requests SET status = ? WHERE ref = ?", (decision, ref))
+    conn.commit()
+    row = conn.execute(
+        "SELECT d.*, e.name as employee_name FROM document_requests d JOIN employees e ON d.employee_id = e.id WHERE d.ref = ?",
+        (ref,)
+    ).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        create_notification(d["employee_id"], "document",
+            f"Document {decision.title()}",
+            f"Your {d['document_type']} request ({ref}) status: {decision}.")
+        return d
+    return None
+
+
+# -- Manager: Grievance Management -----------------------
+
+def get_department_grievances(manager_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT g.*, e.name as employee_name, e.position
+           FROM grievances g JOIN employees e ON g.employee_id = e.id
+           WHERE e.manager_id = ? OR g.assigned_to = ?
+           ORDER BY g.submitted_at DESC""",
+        (manager_id, manager_id)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def assign_grievance(ref: str, assigned_to: str) -> dict | None:
+    conn = get_db()
+    conn.execute("UPDATE grievances SET assigned_to = ?, status = 'investigating' WHERE ref = ?", (assigned_to, ref))
+    conn.commit()
+    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def resolve_grievance(ref: str, resolution: str) -> dict | None:
+    return update_grievance_status(ref, "resolved", resolution)
+
+
+# -- Manager: Team Analytics ----------------------------
+
+def get_team_performance_summary(manager_id: str) -> list[dict]:
+    """Get performance overview for all direct reports."""
+    conn = get_db()
+    reports = get_direct_reports(manager_id)
+    result = []
+    for emp in reports:
+        eid = emp["id"]
+        # Latest review
+        review = conn.execute("SELECT rating, period FROM performance_reviews WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1", (eid,)).fetchone()
+        # Goals
+        goals = conn.execute("SELECT COUNT(*) as total, SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END) as completed FROM performance_goals WHERE employee_id = ?", (eid,)).fetchone()
+        # Training
+        training = conn.execute("SELECT COUNT(*) as enrolled, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed FROM employee_trainings WHERE employee_id = ?", (eid,)).fetchone()
+        # Attendance this month
+        from datetime import date
+        month_start = date.today().replace(day=1).isoformat()
+        att = conn.execute("SELECT COUNT(*) as days, SUM(CASE WHEN status IN ('present','remote') THEN 1 ELSE 0 END) as present FROM attendance_records WHERE employee_id = ? AND date >= ?", (eid, month_start)).fetchone()
+        
+        result.append({
+            "employee_id": eid,
+            "name": emp["name"],
+            "position": emp["position"],
+            "latest_rating": review["rating"] if review else None,
+            "review_period": review["period"] if review else None,
+            "goals_total": goals["total"] or 0,
+            "goals_completed": goals["completed"] or 0,
+            "trainings_enrolled": training["enrolled"] or 0,
+            "trainings_completed": training["completed"] or 0,
+            "attendance_days": att["days"] or 0,
+            "attendance_present": att["present"] or 0,
+        })
+    conn.close()
+    return result
+
+
+def get_all_pending_for_manager(manager_id: str) -> dict:
+    """Get ALL pending items across all categories for a manager."""
+    return {
+        "leave_requests": get_pending_approvals(manager_id),
+        "loan_requests": get_pending_loan_requests(manager_id),
+        "travel_requests": get_pending_travel_requests(manager_id),
+        "overtime_requests": get_pending_overtime_requests(manager_id),
+        "document_requests": get_pending_document_requests(manager_id),
+        "grievances": get_department_grievances(manager_id),
+        "pending_reviews": get_pending_reviews(manager_id),
+    }
+
+
+def get_team_training_compliance(manager_id: str) -> list[dict]:
+    """Get training compliance for all direct reports."""
+    reports = get_direct_reports(manager_id)
+    result = []
+    for emp in reports:
+        stats = get_training_stats(emp["id"])
+        result.append({
+            "employee_id": emp["id"],
+            "name": emp["name"],
+            "position": emp["position"],
+            **stats,
+        })
+    return result
+
+
+def reassign_employee(emp_id: str, new_manager_id: str) -> dict:
+    """Reassign an employee to a new manager."""
+    conn = get_db()
+    conn.execute("UPDATE employees SET manager_id = ? WHERE id = ?", (new_manager_id, emp_id))
+    conn.commit()
+    row = conn.execute("SELECT id, name, position, department, manager_id FROM employees WHERE id = ?", (emp_id,)).fetchone()
+    conn.close()
+    if row:
+        d = dict(row)
+        mgr = get_employee(new_manager_id)
+        create_notification(emp_id, "hr",
+            "Manager Reassignment",
+            f"You have been reassigned to {mgr['name'] if mgr else new_manager_id}.")
+        return d
+    return {"error": "Employee not found"}
+
+
+def get_headcount_by_department() -> list[dict]:
+    """Get headcount breakdown by department."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_leave_analytics(manager_id: str) -> dict:
+    """Get leave analytics for manager's team."""
+    conn = get_db()
+    reports = get_direct_reports(manager_id)
+    report_ids = [r["id"] for r in reports]
+    if not report_ids:
+        conn.close()
+        return {"total_requests": 0, "by_type": {}, "by_status": {}}
+    
+    placeholders = ",".join("?" * len(report_ids))
+    rows = conn.execute(f"SELECT leave_type, status, COUNT(*) as cnt FROM leave_requests WHERE employee_id IN ({placeholders}) GROUP BY leave_type, status", report_ids).fetchall()
+    
+    by_type = {}
+    by_status = {}
+    total = 0
+    for r in rows:
+        by_type[r["leave_type"]] = by_type.get(r["leave_type"], 0) + r["cnt"]
+        by_status[r["status"]] = by_status.get(r["status"], 0) + r["cnt"]
+        total += r["cnt"]
+    
+    conn.close()
+    return {"total_requests": total, "by_type": by_type, "by_status": by_status}
 
 # Auto-init on import
 init_db()
