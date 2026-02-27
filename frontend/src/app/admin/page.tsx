@@ -3,6 +3,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+// Admin API - tries local agent first, falls back to Vercel API
+const ADMIN_ENDPOINTS = [
+  "http://localhost:8082/api/admin",
+  "/api/admin",
+];
+
+async function adminFetch(params: string, options?: RequestInit): Promise<any> {
+  for (const base of ADMIN_ENDPOINTS) {
+    try {
+      const url = options?.method === "POST" ? `${base}${params}` : `${base}?${params}`;
+      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(3000) });
+      if (res.ok) return res.json();
+    } catch { continue; }
+  }
+  return null;
+}
+
 interface Employee { id: string; name: string; nameAr: string; position: string; department: string; email: string; phone: string; joinDate: string; grade: string; managerId: string | null; managerName: string | null; nationality: string; annualLeave: number; sickLeave: number; emergencyLeave: number; studyLeave: number; salary: number; housing: number; transport: number; totalSalary: number; directReports: { id: string; name: string }[]; isManager: boolean; }
 interface LeaveRequest { ref: string; employeeId: string; employeeName: string; department: string; leaveType: string; startDate: string; endDate: string; days: number; reason: string; status: string; approverId: string; approverName: string; }
 interface Loan { ref: string; employeeId: string; employeeName: string; department: string; loanType: string; amount: number; remaining: number; monthlyInstallment: number; installmentsLeft: number; status: string; }
@@ -69,6 +86,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [editingManager, setEditingManager] = useState<string | null>(null);
   const [selectedManager, setSelectedManager] = useState("");
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     try {
@@ -78,26 +96,40 @@ export default function AdminPage() {
     setAuthed(false);
   }, []);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     if (!authed) return;
-    fetch("/api/admin?section=overview").then(r => r.json()).then(setOverview).catch(() => {});
-    fetch("/api/admin?section=employees").then(r => r.json()).then(setEmployees).catch(() => {});
-    fetch("/api/admin?section=leaves").then(r => r.json()).then(setLeaves).catch(() => {});
-    fetch("/api/admin?section=loans").then(r => r.json()).then(setLoans).catch(() => {});
-    fetch("/api/admin?section=documents").then(r => r.json()).then(setDocuments).catch(() => {});
-    fetch("/api/admin?section=announcements").then(r => r.json()).then(setAnnouncements).catch(() => {});
-    fetch("/api/admin?section=grievances").then(r => r.json()).then(setGrievances).catch(() => {});
+    const ov = await adminFetch("section=overview");
+    if (ov && ov.totalEmployees > 0) {
+      setConnected(true);
+      setOverview(ov);
+      adminFetch("section=employees").then(d => d && setEmployees(d));
+      adminFetch("section=leaves").then(d => d && setLeaves(d));
+      adminFetch("section=loans").then(d => d && setLoans(d));
+      adminFetch("section=documents").then(d => d && setDocuments(d));
+      adminFetch("section=announcements").then(d => d && setAnnouncements(d));
+      adminFetch("section=grievances").then(d => d && setGrievances(d));
+    } else {
+      setConnected(false);
+    }
   }, [authed]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleApprove = async (type: string, ref: string, decision: string) => {
-    await fetch(`/api/admin?action=approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ref, decision }) });
+    await adminFetch(`/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, ref, decision }),
+    });
     loadData();
   };
 
   const handleReassign = async (empId: string, newMgrId: string) => {
-    await fetch(`/api/admin?action=reassign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employeeId: empId, newManagerId: newMgrId }) });
+    await adminFetch(`/reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeId: empId, newManagerId: newMgrId }),
+    });
     setEditingManager(null);
     loadData();
   };
@@ -131,11 +163,25 @@ export default function AdminPage() {
             <div><h1 className="text-base font-bold text-gray-900">Taliq Admin</h1></div>
           </div>
           <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-400"}`} title={connected ? "Connected to DB" : "DB offline"} />
+            <span className="text-[10px] text-gray-400">{connected ? "Live DB" : "Offline"}</span>
             <button onClick={loadData} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100">Refresh</button>
             <button onClick={() => router.push("/")} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100">Back to App</button>
           </div>
         </div>
       </header>
+
+      {!connected && (
+        <div className="max-w-7xl mx-auto px-6 py-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Agent Not Connected</p>
+              <p className="text-xs text-amber-600">The Taliq agent must be running locally for admin to show live data. Start the agent and click Refresh.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 py-5">
         <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 overflow-x-auto">
@@ -232,7 +278,7 @@ export default function AdminPage() {
                           <span className="text-emerald-600 font-medium">{e.directReports.length} reports</span>
                         ) : "-"}
                       </td>
-                      <td className="px-4 py-3 text-xs font-medium text-gray-900">{e.totalSalary.toLocaleString()} SAR</td>
+                      <td className="px-4 py-3 text-xs font-medium text-gray-900">{e.totalSalary?.toLocaleString()} SAR</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <Badge text={`A:${e.annualLeave}`} color="blue" />
@@ -247,7 +293,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* LEAVE REQUESTS with Approve/Reject buttons */}
+        {/* LEAVE REQUESTS */}
         {tab === "Leave Requests" && (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -281,7 +327,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* LOANS with Approve/Reject */}
+        {/* LOANS */}
         {tab === "Loans" && (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -294,18 +340,16 @@ export default function AdminPage() {
                 <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
                 <th className="text-right px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Amount</th>
                 <th className="text-right px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Remaining</th>
-                <th className="text-right px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">EMI</th>
                 <th className="text-center px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Status</th>
                 <th className="text-center px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Actions</th>
               </tr></thead>
               <tbody className="divide-y divide-gray-50">
                 {loans.map(l => (
                   <tr key={l.ref} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-2.5 text-sm text-gray-900">{l.employeeName} <span className="text-[10px] text-gray-400">{l.ref}</span></td>
+                    <td className="px-4 py-2.5 text-sm text-gray-900">{l.employeeName}<br/><span className="text-[10px] text-gray-400">{l.ref}</span></td>
                     <td className="px-4 py-2.5 text-xs text-gray-600">{l.loanType}</td>
-                    <td className="px-4 py-2.5 text-sm text-right font-medium">{l.amount.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-sm text-right text-amber-600">{l.remaining.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-sm text-right text-gray-600">{l.monthlyInstallment?.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-sm text-right font-medium">{l.amount?.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-sm text-right text-amber-600">{l.remaining?.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-center"><StatusBadge status={l.status} /></td>
                     <td className="px-4 py-2.5 text-center">
                       {l.status === "pending" && (
@@ -324,7 +368,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* DOCUMENTS with Approve */}
+        {/* DOCUMENTS */}
         {tab === "Documents" && (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-semibold text-gray-800">Document Requests</h3></div>
@@ -333,16 +377,16 @@ export default function AdminPage() {
                 <div key={d.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{d.employeeName}</p>
-                    <p className="text-[10px] text-gray-400">{d.ref} - {d.documentType} - Est: {d.estimatedDate}</p>
+                    <p className="text-[10px] text-gray-400">{d.ref} - {d.documentType}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={d.status} />
                     {d.status !== "ready" && d.status !== "rejected" && (
                       <div className="flex gap-1">
                         <button onClick={() => handleApprove("document", d.ref, "ready")}
-                          className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 hover:bg-emerald-100">Ready</button>
+                          className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600">Ready</button>
                         <button onClick={() => handleApprove("document", d.ref, "rejected")}
-                          className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] text-red-600 hover:bg-red-100">Reject</button>
+                          className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] text-red-600">Reject</button>
                       </div>
                     )}
                   </div>
@@ -367,9 +411,7 @@ export default function AdminPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-900">{g.employeeName} <span className="text-gray-400 text-xs">({g.department})</span></p>
                       <p className="text-xs text-gray-700 mt-0.5">{g.subject}</p>
-                      <p className="text-[10px] text-gray-400">{g.ref} - {g.category} - {g.submittedAt}</p>
-                      {g.description && <p className="text-[10px] text-gray-400 italic mt-0.5">{g.description}</p>}
-                      {g.resolution && <p className="text-[10px] text-emerald-600 mt-0.5">Resolution: {g.resolution}</p>}
+                      <p className="text-[10px] text-gray-400">{g.ref} - {g.category}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <SeverityBadge severity={g.severity} />
@@ -404,30 +446,13 @@ export default function AdminPage() {
         {/* POLICIES */}
         {tab === "Policies" && (
           <div className="space-y-4">
-            {/* Leave Policy */}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Leave Policy</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-blue-50 rounded-xl p-3 text-center">
-                  <p className="text-xs text-blue-400">Annual</p>
-                  <p className="text-2xl font-bold text-blue-700">30</p>
-                  <p className="text-[10px] text-blue-400">days/year</p>
-                </div>
-                <div className="bg-red-50 rounded-xl p-3 text-center">
-                  <p className="text-xs text-red-400">Sick</p>
-                  <p className="text-2xl font-bold text-red-700">30</p>
-                  <p className="text-[10px] text-red-400">days/year</p>
-                </div>
-                <div className="bg-orange-50 rounded-xl p-3 text-center">
-                  <p className="text-xs text-orange-400">Emergency</p>
-                  <p className="text-2xl font-bold text-orange-700">5</p>
-                  <p className="text-[10px] text-orange-400">days/year</p>
-                </div>
-                <div className="bg-purple-50 rounded-xl p-3 text-center">
-                  <p className="text-xs text-purple-400">Study</p>
-                  <p className="text-2xl font-bold text-purple-700">15</p>
-                  <p className="text-[10px] text-purple-400">days/year</p>
-                </div>
+                <div className="bg-blue-50 rounded-xl p-3 text-center"><p className="text-xs text-blue-400">Annual</p><p className="text-2xl font-bold text-blue-700">30</p><p className="text-[10px] text-blue-400">days/year</p></div>
+                <div className="bg-red-50 rounded-xl p-3 text-center"><p className="text-xs text-red-400">Sick</p><p className="text-2xl font-bold text-red-700">30</p><p className="text-[10px] text-red-400">days/year</p></div>
+                <div className="bg-orange-50 rounded-xl p-3 text-center"><p className="text-xs text-orange-400">Emergency</p><p className="text-2xl font-bold text-orange-700">5</p><p className="text-[10px] text-orange-400">days/year</p></div>
+                <div className="bg-purple-50 rounded-xl p-3 text-center"><p className="text-xs text-purple-400">Study</p><p className="text-2xl font-bold text-purple-700">15</p><p className="text-[10px] text-purple-400">days/year</p></div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                 <div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400">Max Carry Over:</span> <span className="font-medium">5 days</span></div>
@@ -435,8 +460,6 @@ export default function AdminPage() {
                 <div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400">Approval:</span> <span className="font-medium text-emerald-600">Required</span></div>
               </div>
             </div>
-
-            {/* Loan Policy */}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Loan Policy</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -447,8 +470,6 @@ export default function AdminPage() {
               </div>
               <div className="mt-3"><span className="text-xs text-gray-400">Types:</span> <div className="flex gap-1 mt-1"><Badge text="Interest-Free" color="emerald" /><Badge text="Advance Salary" color="blue" /><Badge text="Personal" color="violet" /><Badge text="Emergency" color="red" /></div></div>
             </div>
-
-            {/* Attendance Policy */}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Attendance Policy</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
@@ -458,16 +479,10 @@ export default function AdminPage() {
                 <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Max OT</span><span className="font-bold text-gray-900 text-lg">4h/day</span></div>
               </div>
             </div>
-
-            {/* Travel Policy */}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Travel Per Diem (SAR/day)</h3>
               <table className="w-full text-xs">
-                <thead><tr className="border-b border-gray-100">
-                  <th className="text-left py-2 text-gray-400">Grade</th>
-                  <th className="text-right py-2 text-gray-400">International</th>
-                  <th className="text-right py-2 text-gray-400">Local</th>
-                </tr></thead>
+                <thead><tr className="border-b border-gray-100"><th className="text-left py-2 text-gray-400">Grade</th><th className="text-right py-2 text-gray-400">International</th><th className="text-right py-2 text-gray-400">Local</th></tr></thead>
                 <tbody>
                   <tr className="border-b border-gray-50"><td className="py-2 font-medium">Chairman (G40+)</td><td className="py-2 text-right font-bold">3,500</td><td className="py-2 text-right font-bold">2,000</td></tr>
                   <tr className="border-b border-gray-50"><td className="py-2 font-medium">C-Level (G38-39)</td><td className="py-2 text-right font-bold">1,750</td><td className="py-2 text-right font-bold">1,200</td></tr>
@@ -475,8 +490,6 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-
-            {/* Grievance Policy */}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
               <h3 className="text-sm font-semibold text-gray-800 mb-3">Grievance SLA (Hours)</h3>
               <div className="grid grid-cols-4 gap-2">
