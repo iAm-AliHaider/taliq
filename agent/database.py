@@ -1,18 +1,47 @@
-"""Taliq HR Database — SQLite persistent storage."""
+"""Taliq HR Database — Neon Postgres persistent storage."""
 
-import sqlite3
 import os
 import json
+import psycopg2
+import psycopg2.extras
 from datetime import date, datetime, timedelta
+from dotenv import load_dotenv
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "taliq.db")
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = False
     return conn
+
+
+def _dict_row(cursor):
+    """Convert cursor row to dict."""
+    if cursor.description is None:
+        return None
+    cols = [d[0] for d in cursor.description]
+    def row_to_dict(row):
+        return dict(zip(cols, row)) if row else None
+    return row_to_dict
+
+
+def _fetchone(cursor):
+    row = cursor.fetchone()
+    if not row or not cursor.description:
+        return None
+    cols = [d[0] for d in cursor.description]
+    return dict(zip(cols, row))
+
+
+def _fetchall(cursor):
+    rows = cursor.fetchall()
+    if not cursor.description:
+        return []
+    cols = [d[0] for d in cursor.description]
+    return [dict(zip(cols, row)) for row in rows]
 
 
 def init_db():
@@ -20,7 +49,7 @@ def init_db():
     conn = get_db()
     c = conn.cursor()
 
-    c.executescript("""
+    c.execute("""
     CREATE TABLE IF NOT EXISTS employees (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -42,12 +71,13 @@ def init_db():
         emergency_leave INTEGER DEFAULT 5,
         study_leave INTEGER DEFAULT 15,
         pin TEXT DEFAULT '1234'
-    );
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS leave_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
-        employee_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         leave_type TEXT NOT NULL,
         start_date TEXT NOT NULL,
         end_date TEXT NOT NULL,
@@ -55,51 +85,52 @@ def init_db():
         reason TEXT,
         status TEXT DEFAULT 'pending',
         approver_id TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS document_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
-        employee_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         document_type TEXT NOT NULL,
         status TEXT DEFAULT 'requested',
         estimated_date TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS loans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
-        employee_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         loan_type TEXT NOT NULL,
         amount REAL NOT NULL,
         remaining REAL NOT NULL,
         monthly_installment REAL,
         installments_left INTEGER,
         status TEXT DEFAULT 'active',
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS announcements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
         author TEXT,
         priority TEXT DEFAULT 'normal',
         acknowledged_count INTEGER DEFAULT 0,
         total_count INTEGER DEFAULT 60,
-        created_at TEXT DEFAULT (datetime('now'))
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS travel_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
-        employee_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         destination TEXT NOT NULL,
         travel_type TEXT DEFAULT 'business',
         start_date TEXT,
@@ -108,13 +139,13 @@ def init_db():
         per_diem REAL,
         total_allowance REAL,
         status TEXT DEFAULT 'draft',
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS attendance_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         date TEXT NOT NULL,
         clock_in TEXT,
         clock_out TEXT,
@@ -124,13 +155,13 @@ def init_db():
         overtime_status TEXT DEFAULT 'none',
         location TEXT DEFAULT 'office',
         notes TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
+        created_at TIMESTAMP DEFAULT NOW(),
         UNIQUE(employee_id, date)
-    );
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS interviews (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
         candidate_name TEXT NOT NULL,
         position TEXT NOT NULL,
@@ -139,29 +170,29 @@ def init_db():
         status TEXT DEFAULT 'in_progress',
         current_question INTEGER DEFAULT 0,
         total_questions INTEGER DEFAULT 5,
-        started_at TEXT DEFAULT (datetime('now')),
-        completed_at TEXT,
+        started_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP,
         average_score REAL,
-        notes TEXT,
-        FOREIGN KEY (interviewer_id) REFERENCES employees(id)
-    );
+        notes TEXT
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS interview_responses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        interview_id INTEGER NOT NULL,
+        id SERIAL PRIMARY KEY,
+        interview_id INTEGER NOT NULL REFERENCES interviews(id),
         question_number INTEGER NOT NULL,
         question_text TEXT NOT NULL,
         question_type TEXT NOT NULL,
         answer_summary TEXT,
         score INTEGER DEFAULT 0,
         feedback TEXT,
-        answered_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (interview_id) REFERENCES interviews(id)
-    );
+        answered_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS performance_reviews (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         reviewer_id TEXT NOT NULL,
         period TEXT NOT NULL,
         rating INTEGER DEFAULT 3,
@@ -171,24 +202,24 @@ def init_db():
         improvements TEXT,
         comments TEXT,
         status TEXT DEFAULT 'draft',
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS performance_goals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         goal TEXT NOT NULL,
         target TEXT,
         progress INTEGER DEFAULT 0,
         status TEXT DEFAULT 'active',
         due_date TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS training_courses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         title TEXT NOT NULL,
         description TEXT,
         provider TEXT,
@@ -196,25 +227,25 @@ def init_db():
         category TEXT DEFAULT 'general',
         mandatory INTEGER DEFAULT 0,
         status TEXT DEFAULT 'available'
-    );
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS employee_trainings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id TEXT NOT NULL,
-        course_id INTEGER NOT NULL,
-        enrollment_date TEXT DEFAULT (date('now')),
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        course_id INTEGER NOT NULL REFERENCES training_courses(id),
+        enrollment_date TEXT DEFAULT CURRENT_DATE::TEXT,
         completion_date TEXT,
         score REAL,
         certificate_ref TEXT,
-        status TEXT DEFAULT 'enrolled',
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
-        FOREIGN KEY (course_id) REFERENCES training_courses(id)
-    );
+        status TEXT DEFAULT 'enrolled'
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS grievances (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         ref TEXT UNIQUE,
-        employee_id TEXT NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         category TEXT NOT NULL,
         subject TEXT NOT NULL,
         description TEXT,
@@ -222,300 +253,96 @@ def init_db():
         status TEXT DEFAULT 'submitted',
         assigned_to TEXT,
         resolution TEXT,
-        submitted_at TEXT DEFAULT (datetime('now')),
-        resolved_at TEXT,
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
+        submitted_at TIMESTAMP DEFAULT NOW(),
+        resolved_at TIMESTAMP
+    )""")
 
+    c.execute("""
     CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_id TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
         type TEXT NOT NULL,
         title TEXT NOT NULL,
         message TEXT,
         read INTEGER DEFAULT 0,
-        created_at TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (employee_id) REFERENCES employees(id)
-    );
-    """)
-
-    # Seed if empty
-    if c.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
-        _seed_data(c)
-
-    # Seed training courses
-    if c.execute("SELECT COUNT(*) FROM training_courses").fetchone()[0] == 0:
-        _seed_training_courses(c)
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
 
     conn.commit()
+
+    # Seed if empty
+    c.execute("SELECT COUNT(*) FROM employees")
+    if c.fetchone()[0] == 0:
+        _seed_data(c)
+        conn.commit()
+
+    c.execute("SELECT COUNT(*) FROM training_courses")
+    if c.fetchone()[0] == 0:
+        _seed_training_courses(c)
+        conn.commit()
+
     conn.close()
 
 
 def _seed_data(c):
     employees = [
-        (
-            "E001",
-            "Ahmed Al-Rashidi",
-            "أحمد الرشيدي",
-            "Senior Software Engineer",
-            "Information Technology",
-            "ahmed.rashidi@mrna.sa",
-            "+966501234567",
-            "2020-03-15",
-            "35",
-            "5",
-            "E003",
-            "Saudi",
-            12000,
-            3000,
-            1500,
-            22,
-            28,
-            4,
-            15,
-            "1234",
-        ),
-        (
-            "E002",
-            "Fatima Al-Zahrani",
-            "فاطمة الزهراني",
-            "HR Manager",
-            "Human Resources",
-            "fatima.zahrani@mrna.sa",
-            "+966502345678",
-            "2018-01-10",
-            "37",
-            "6",
-            "E005",
-            "Saudi",
-            18000,
-            4500,
-            2000,
-            15,
-            30,
-            5,
-            15,
-            "2345",
-        ),
-        (
-            "E003",
-            "Mohammed Al-Otaibi",
-            "محمد العتيبي",
-            "IT Manager",
-            "Information Technology",
-            "mohammed.otaibi@mrna.sa",
-            "+966503456789",
-            "2017-06-01",
-            "38",
-            "6",
-            "E005",
-            "Saudi",
-            22000,
-            5500,
-            2500,
-            10,
-            25,
-            3,
-            15,
-            "3456",
-        ),
-        (
-            "E004",
-            "Sara Al-Ghamdi",
-            "سارة الغامدي",
-            "Financial Analyst",
-            "Finance",
-            "sara.ghamdi@mrna.sa",
-            "+966504567890",
-            "2021-09-01",
-            "34",
-            "4",
-            "E003",
-            "Saudi",
-            10000,
-            2500,
-            1200,
-            28,
-            30,
-            5,
-            15,
-            "4567",
-        ),
-        (
-            "E005",
-            "Khalid Al-Harbi",
-            "خالد الحربي",
-            "CHRO",
-            "Executive",
-            "khalid.harbi@mrna.sa",
-            "+966505678901",
-            "2015-01-15",
-            "40",
-            "7",
-            None,
-            "Saudi",
-            35000,
-            8750,
-            3500,
-            5,
-            20,
-            2,
-            15,
-            "5678",
-        ),
-        (
-            "E006",
-            "Nour Al-Shammari",
-            "نور الشمري",
-            "Recruitment Specialist",
-            "Human Resources",
-            "nour.shammari@mrna.sa",
-            "+966506789012",
-            "2022-03-20",
-            "33",
-            "4",
-            "E002",
-            "Saudi",
-            8500,
-            2125,
-            1000,
-            26,
-            30,
-            5,
-            15,
-            "6789",
-        ),
-        (
-            "E007",
-            "Rajesh Kumar",
-            "راجيش كومار",
-            "DevOps Engineer",
-            "Information Technology",
-            "rajesh.kumar@mrna.sa",
-            "+966507890123",
-            "2019-11-01",
-            "35",
-            "5",
-            "E003",
-            "Indian",
-            11000,
-            2750,
-            1300,
-            18,
-            30,
-            5,
-            0,
-            "7890",
-        ),
+        ("E001", "Ahmed Al-Rashidi", "أحمد الرشيدي", "Senior Software Engineer", "Information Technology", "ahmed.rashidi@mrna.sa", "+966501234567", "2020-03-15", "35", "5", "E003", "Saudi", 12000, 3000, 1500, 22, 28, 4, 15, "1234"),
+        ("E002", "Fatima Al-Zahrani", "فاطمة الزهراني", "HR Manager", "Human Resources", "fatima.zahrani@mrna.sa", "+966502345678", "2018-01-10", "37", "6", "E005", "Saudi", 18000, 4500, 2000, 15, 30, 5, 15, "2345"),
+        ("E003", "Mohammed Al-Otaibi", "محمد العتيبي", "IT Manager", "Information Technology", "mohammed.otaibi@mrna.sa", "+966503456789", "2017-06-01", "38", "6", "E005", "Saudi", 22000, 5500, 2500, 10, 25, 3, 15, "3456"),
+        ("E004", "Sara Al-Ghamdi", "سارة الغامدي", "Financial Analyst", "Finance", "sara.ghamdi@mrna.sa", "+966504567890", "2021-09-01", "34", "4", "E003", "Saudi", 10000, 2500, 1200, 28, 30, 5, 15, "4567"),
+        ("E005", "Khalid Al-Harbi", "خالد الحربي", "CHRO", "Executive", "khalid.harbi@mrna.sa", "+966505678901", "2015-01-15", "40", "7", None, "Saudi", 35000, 8750, 3500, 5, 20, 2, 15, "5678"),
+        ("E006", "Nour Al-Shammari", "نور الشمري", "Recruitment Specialist", "Human Resources", "nour.shammari@mrna.sa", "+966506789012", "2022-03-20", "33", "4", "E002", "Saudi", 8500, 2125, 1000, 26, 30, 5, 15, "6789"),
+        ("E007", "Rajesh Kumar", "راجيش كومار", "DevOps Engineer", "Information Technology", "rajesh.kumar@mrna.sa", "+966507890123", "2019-11-01", "35", "5", "E003", "Indian", 11000, 2750, 1300, 18, 30, 5, 0, "7890"),
     ]
-    c.executemany(
-        """INSERT INTO employees VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        employees,
-    )
+    for e in employees:
+        c.execute("INSERT INTO employees VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", e)
 
     # Seed loans
-    c.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
-        ("LN-2026-001", "E001", "Interest-Free", 24000, 16000, 2000, 8, "active"),
-    )
-    c.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
-        ("LN-2026-002", "E004", "Advance Salary", 10000, 5000, 2500, 2, "active"),
-    )
+    c.execute("INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("LN-2026-001", "E001", "Interest-Free", 24000, 16000, 2000, 8, "active"))
+    c.execute("INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        ("LN-2026-002", "E004", "Advance Salary", 10000, 5000, 2500, 2, "active"))
 
     # Seed announcements
     announcements = [
-        (
-            "Ramadan Working Hours",
-            "During Ramadan, working hours will be 10 AM to 3 PM.",
-            "HR Department",
-            "important",
-            45,
-            60,
-        ),
-        (
-            "Annual Performance Review",
-            "2026 review cycle begins March 1st. Managers prepare KPI evaluations.",
-            "Khalid Al-Harbi",
-            "urgent",
-            12,
-            60,
-        ),
-        (
-            "New Parking Policy",
-            "Register vehicles through portal by March 15. Unregistered vehicles not allowed.",
-            "Operations",
-            "normal",
-            30,
-            60,
-        ),
+        ("Ramadan Working Hours", "During Ramadan, working hours will be 10 AM to 3 PM.", "HR Department", "important", 45, 60),
+        ("Annual Performance Review", "2026 review cycle begins March 1st. Managers prepare KPI evaluations.", "Khalid Al-Harbi", "urgent", 12, 60),
+        ("New Parking Policy", "Register vehicles through portal by March 15. Unregistered vehicles not allowed.", "Operations", "normal", 30, 60),
     ]
-    c.executemany(
-        "INSERT INTO announcements (title, content, author, priority, acknowledged_count, total_count) VALUES (?,?,?,?,?,?)",
-        announcements,
-    )
+    for a in announcements:
+        c.execute("INSERT INTO announcements (title, content, author, priority, acknowledged_count, total_count) VALUES (%s,%s,%s,%s,%s,%s)", a)
 
-    # Seed pending leave requests
+    # Seed leave requests
     leaves = [
-        (
-            "LR-2026-001",
-            "E001",
-            "annual",
-            "2026-03-10",
-            "2026-03-14",
-            5,
-            "Family vacation",
-            "pending",
-            "E003",
-        ),
-        (
-            "LR-2026-002",
-            "E004",
-            "sick",
-            "2026-02-25",
-            "2026-02-26",
-            2,
-            "Medical appointment",
-            "pending",
-            "E003",
-        ),
-        (
-            "LR-2026-003",
-            "E006",
-            "annual",
-            "2026-03-20",
-            "2026-03-25",
-            6,
-            "Wedding attendance",
-            "pending",
-            "E002",
-        ),
-        (
-            "LR-2026-004",
-            "E007",
-            "annual",
-            "2026-04-01",
-            "2026-04-15",
-            15,
-            "Annual home visit",
-            "pending",
-            "E003",
-        ),
+        ("LR-2026-001", "E001", "annual", "2026-03-10", "2026-03-14", 5, "Family vacation", "pending", "E003"),
+        ("LR-2026-002", "E004", "sick", "2026-02-25", "2026-02-26", 2, "Medical appointment", "pending", "E003"),
+        ("LR-2026-003", "E006", "annual", "2026-03-20", "2026-03-25", 6, "Wedding attendance", "pending", "E002"),
+        ("LR-2026-004", "E007", "annual", "2026-04-01", "2026-04-15", 15, "Annual home visit", "pending", "E003"),
     ]
-    c.executemany(
-        "INSERT INTO leave_requests (ref, employee_id, leave_type, start_date, end_date, days, reason, status, approver_id) VALUES (?,?,?,?,?,?,?,?,?)",
-        leaves,
-    )
+    for l in leaves:
+        c.execute("INSERT INTO leave_requests (ref, employee_id, leave_type, start_date, end_date, days, reason, status, approver_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)", l)
 
     # Seed document requests
-    c.execute(
-        "INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (?,?,?,?,?)",
-        ("DOC-2026-001", "E001", "Salary Certificate", "ready", "2026-02-22"),
-    )
-    c.execute(
-        "INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (?,?,?,?,?)",
-        ("DOC-2026-002", "E004", "Experience Certificate", "processing", "2026-02-27"),
-    )
+    c.execute("INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (%s,%s,%s,%s,%s)",
+        ("DOC-2026-001", "E001", "Salary Certificate", "ready", "2026-02-22"))
+    c.execute("INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (%s,%s,%s,%s,%s)",
+        ("DOC-2026-002", "E004", "Experience Certificate", "processing", "2026-02-27"))
+
+
+def _seed_training_courses(c):
+    courses = [
+        ("Safety Compliance", "OSHA workplace safety standards and emergency procedures", "Internal", 8, "compliance", 1),
+        ("Leadership Workshop", "Developing leadership skills for mid-level managers", "Dale Carnegie", 16, "leadership", 0),
+        ("Excel Advanced", "Pivot tables, VLOOKUP, macros, and data analysis", "Microsoft", 6, "technical", 0),
+        ("Project Management Professional", "PMP preparation and Agile methodology", "PMI", 40, "professional", 0),
+        ("Cybersecurity Awareness", "Phishing prevention, password security, data protection", "Internal", 4, "compliance", 1),
+        ("First Aid & CPR", "Emergency response and basic life support certification", "Red Crescent", 8, "safety", 1),
+        ("Business Communication", "Professional writing and presentation skills", "External", 12, "professional", 0),
+        ("Arabic Business Writing", "Formal correspondence and report writing in Arabic", "Internal", 6, "language", 0),
+    ]
+    for title, desc, provider, hours, cat, mandatory in courses:
+        c.execute("INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory) VALUES (%s,%s,%s,%s,%s,%s)",
+                  (title, desc, provider, hours, cat, mandatory))
 
 
 # ── Query Functions ─────────────────────────────────────
@@ -523,11 +350,12 @@ def _seed_data(c):
 
 def get_employee(emp_id: str) -> dict | None:
     conn = get_db()
-    row = conn.execute("SELECT * FROM employees WHERE id = ?", (emp_id,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM employees WHERE id = %s", (emp_id,))
+    d = _fetchone(c)
     conn.close()
-    if not row:
+    if not d:
         return None
-    d = dict(row)
     d["salary"] = {
         "basic": d["basic_salary"],
         "housing": d["housing_allowance"],
@@ -554,120 +382,95 @@ def get_manager(emp_id: str) -> dict | None:
 # ── Leave CRUD ──────────────────────────────────────────
 
 
-def submit_leave_request(
-    emp_id: str, leave_type: str, start_date: str, end_date: str, days: int, reason: str
-) -> dict:
+def submit_leave_request(emp_id, leave_type, start_date, end_date, days, reason):
     conn = get_db()
+    c = conn.cursor()
     emp = get_employee(emp_id)
     approver = emp.get("manager_id") if emp else None
-
-    # Generate ref
-    count = conn.execute("SELECT COUNT(*) FROM leave_requests").fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM leave_requests")
+    count = c.fetchone()[0]
     ref = f"LR-2026-{count + 1:03d}"
-
-    conn.execute(
-        "INSERT INTO leave_requests (ref, employee_id, leave_type, start_date, end_date, days, reason, status, approver_id) VALUES (?,?,?,?,?,?,?,?,?)",
-        (
-            ref,
-            emp_id,
-            leave_type,
-            start_date,
-            end_date,
-            days,
-            reason,
-            "pending",
-            approver,
-        ),
-    )
-    # Deduct from balance
+    c.execute("INSERT INTO leave_requests (ref, employee_id, leave_type, start_date, end_date, days, reason, status, approver_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (ref, emp_id, leave_type, start_date, end_date, days, reason, "pending", approver))
     col = f"{leave_type}_leave"
-    conn.execute(f"UPDATE employees SET {col} = {col} - ? WHERE id = ?", (days, emp_id))
+    c.execute(f"UPDATE employees SET {col} = {col} - %s WHERE id = %s", (days, emp_id))
     conn.commit()
-
-    row = conn.execute("SELECT * FROM leave_requests WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM leave_requests WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_leave_requests(emp_id: str) -> list[dict]:
+def get_leave_requests(emp_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM leave_requests WHERE employee_id = ? ORDER BY created_at DESC",
-        (emp_id,),
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM leave_requests WHERE employee_id = %s ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_pending_approvals(manager_id: str) -> list[dict]:
+def get_pending_approvals(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT lr.*, e.name as employee_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id WHERE lr.approver_id = ? AND lr.status = 'pending' ORDER BY lr.created_at DESC",
-        (manager_id,),
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT lr.*, e.name as employee_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id WHERE lr.approver_id = %s AND lr.status = 'pending' ORDER BY lr.created_at DESC", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def approve_leave_request(ref: str, decision: str) -> dict | None:
+def approve_leave_request(ref, decision):
     conn = get_db()
-    conn.execute(
-        "UPDATE leave_requests SET status = ?, updated_at = datetime('now') WHERE ref = ?",
-        (decision, ref),
-    )
+    c = conn.cursor()
+    c.execute("UPDATE leave_requests SET status = %s, updated_at = NOW() WHERE ref = %s", (decision, ref))
     conn.commit()
-    row = conn.execute(
-        "SELECT lr.*, e.name as employee_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id WHERE lr.ref = ?",
-        (ref,),
-    ).fetchone()
+    c.execute("SELECT lr.*, e.name as employee_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id WHERE lr.ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
 # ── Document CRUD ───────────────────────────────────────
 
 
-def create_document_request(emp_id: str, doc_type: str) -> dict:
+def create_document_request(emp_id, doc_type):
     conn = get_db()
-    count = conn.execute("SELECT COUNT(*) FROM document_requests").fetchone()[0]
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM document_requests")
+    count = c.fetchone()[0]
     ref = f"DOC-2026-{count + 1:03d}"
     est = str(date.today() + timedelta(days=2))
-    conn.execute(
-        "INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (?,?,?,?,?)",
-        (ref, emp_id, doc_type, "requested", est),
-    )
+    c.execute("INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (%s,%s,%s,%s,%s)",
+        (ref, emp_id, doc_type, "requested", est))
     conn.commit()
-    row = conn.execute(
-        "SELECT * FROM document_requests WHERE ref = ?", (ref,)
-    ).fetchone()
+    c.execute("SELECT * FROM document_requests WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_document_requests(emp_id: str) -> list[dict]:
+def get_document_requests(emp_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM document_requests WHERE employee_id = ? ORDER BY created_at DESC",
-        (emp_id,),
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM document_requests WHERE employee_id = %s ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 # ── Loan CRUD ───────────────────────────────────────────
 
 
-def get_employee_loans(emp_id: str) -> list[dict]:
+def get_employee_loans(emp_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM loans WHERE employee_id = ? AND status IN ('active', 'pending') ORDER BY created_at DESC",
-        (emp_id,),
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM loans WHERE employee_id = %s AND status IN ('active', 'pending') ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def check_loan_eligibility(emp_id: str) -> dict:
+def check_loan_eligibility(emp_id):
     emp = get_employee(emp_id)
     if not emp:
         return {"eligible": False, "reason": "Employee not found"}
@@ -681,331 +484,232 @@ def check_loan_eligibility(emp_id: str) -> dict:
     max_emi = basic * 0.33
     available = max_emi - existing_emi
     if available <= 0:
-        return {
-            "eligible": False,
-            "reason": f"EMI cap reached ({existing_emi:,.0f}/{max_emi:,.0f} SAR)",
-        }
-    return {
-        "eligible": True,
-        "max_amount": int(min(basic * 2, available * 12)),
-        "max_emi": int(available),
-        "service_years": round(years, 1),
-    }
+        return {"eligible": False, "reason": f"EMI cap reached ({existing_emi:,.0f}/{max_emi:,.0f} SAR)"}
+    return {"eligible": True, "max_amount": int(min(basic * 2, available * 12)), "max_emi": int(available), "service_years": round(years, 1)}
 
 
-def create_loan(emp_id: str, loan_type: str, amount: float, months: int) -> dict:
+def create_loan(emp_id, loan_type, amount, months):
     conn = get_db()
-    count = conn.execute("SELECT COUNT(*) FROM loans").fetchone()[0]
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM loans")
+    count = c.fetchone()[0]
     ref = f"LN-2026-{count + 1:03d}"
     monthly = round(amount / months, 2)
-    conn.execute(
-        "INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (?,?,?,?,?,?,?,?)",
-        (ref, emp_id, loan_type, amount, amount, monthly, months, "pending"),
-    )
+    c.execute("INSERT INTO loans (ref, employee_id, loan_type, amount, remaining, monthly_installment, installments_left, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (ref, emp_id, loan_type, amount, amount, monthly, months, "pending"))
     conn.commit()
-    row = conn.execute("SELECT * FROM loans WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM loans WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
 # ── Travel CRUD ─────────────────────────────────────────
 
-PER_DIEM = {
-    "chairman": {"intl": 3500, "local": 2000},
-    "c_level": {"intl": 1750, "local": 1200},
-    "other": {"intl": 1350, "local": 900},
-}
+PER_DIEM = {"chairman": {"intl": 3500, "local": 2000}, "c_level": {"intl": 1750, "local": 1200}, "other": {"intl": 1350, "local": 900}}
 
-
-def get_per_diem(grade: str, international: bool = False) -> int:
-    g = int(grade) if grade.isdigit() else 34
+def get_per_diem(grade, international=False):
+    g = int(grade) if grade and grade.isdigit() else 34
     tier = "chairman" if g >= 40 else "c_level" if g >= 38 else "other"
     return PER_DIEM[tier]["intl" if international else "local"]
 
 
-def create_travel_request(
-    emp_id: str,
-    destination: str,
-    start_date: str,
-    end_date: str,
-    days: int,
-    travel_type: str = "business",
-) -> dict:
+def create_travel_request(emp_id, destination, start_date, end_date, days, travel_type="business"):
     conn = get_db()
+    c = conn.cursor()
     emp = get_employee(emp_id)
     per_diem = get_per_diem(emp.get("grade", "34")) if emp else 900
     total = per_diem * min(days, 5)
-    count = conn.execute("SELECT COUNT(*) FROM travel_requests").fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM travel_requests")
+    count = c.fetchone()[0]
     ref = f"TR-2026-{count + 1:03d}"
-    conn.execute(
-        "INSERT INTO travel_requests (ref, employee_id, destination, travel_type, start_date, end_date, days, per_diem, total_allowance, status) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (
-            ref,
-            emp_id,
-            destination,
-            travel_type,
-            start_date,
-            end_date,
-            days,
-            per_diem,
-            total,
-            "pending",
-        ),
-    )
+    c.execute("INSERT INTO travel_requests (ref, employee_id, destination, travel_type, start_date, end_date, days, per_diem, total_allowance, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        (ref, emp_id, destination, travel_type, start_date, end_date, days, per_diem, total, "pending"))
     conn.commit()
-    row = conn.execute("SELECT * FROM travel_requests WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM travel_requests WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
+
+
+def get_travel_requests(emp_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM travel_requests WHERE employee_id = %s ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
 
 
 # ── Announcements ───────────────────────────────────────
 
-
-def get_announcements(limit: int = 5) -> list[dict]:
+def get_announcements(limit=5):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM announcements ORDER BY created_at DESC LIMIT ?", (limit,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM announcements ORDER BY created_at DESC LIMIT %s", (limit,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-# ── Team Attendance (simulated) ─────────────────────────
+# ── Team Attendance ─────────────────────────────────────
 
-
-def get_team_attendance(manager_id: str) -> list[dict]:
+def get_team_attendance(manager_id):
     import random
-
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, name FROM employees WHERE manager_id = ?", (manager_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM employees WHERE manager_id = %s", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
     statuses = ["present", "present", "present", "remote", "late", "absent", "on_leave"]
     result = []
     for r in rows:
         status = random.choice(statuses)
-        ci = (
-            f"0{random.randint(7, 9)}:{random.randint(0, 59):02d}"
-            if status in ("present", "late", "remote")
-            else None
-        )
-        co = (
-            f"{random.randint(16, 18)}:{random.randint(0, 59):02d}"
-            if status == "present"
-            else None
-        )
-        result.append(
-            {"name": r["name"], "status": status, "checkIn": ci, "checkOut": co}
-        )
+        ci = f"0{random.randint(7,9)}:{random.randint(0,59):02d}" if status in ("present","late","remote") else None
+        co = f"{random.randint(16,18)}:{random.randint(0,59):02d}" if status == "present" else None
+        result.append({"name": r["name"], "status": status, "checkIn": ci, "checkOut": co})
     return result
 
 
 # ── Authentication ──────────────────────────────────────
 
-
-def authenticate(employee_id: str, pin: str) -> dict | None:
+def authenticate(employee_id, pin):
     conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM employees WHERE id = ? AND pin = ?", (employee_id, pin)
-    ).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM employees WHERE id = %s AND pin = %s", (employee_id, pin))
+    d = _fetchone(c)
     conn.close()
-    if not row:
+    if not d:
         return None
-    d = dict(row)
-    return {
-        "id": d["id"],
-        "name": d["name"],
-        "name_ar": d["name_ar"],
-        "position": d["position"],
-        "department": d["department"],
-        "manager_id": d["manager_id"],
-    }
+    return {"id": d["id"], "name": d["name"], "name_ar": d["name_ar"], "position": d["position"], "department": d["department"], "manager_id": d["manager_id"]}
 
 
-def get_all_employees_summary() -> list[dict]:
+def get_all_employees_summary():
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, name, position, department FROM employees ORDER BY id"
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT id, name, position, department FROM employees ORDER BY id")
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_direct_reports(manager_id: str) -> list[dict]:
+def get_direct_reports(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT id, name, name_ar, position, department FROM employees WHERE manager_id = ?",
-        (manager_id,),
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT id, name, name_ar, position, department FROM employees WHERE manager_id = %s", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def is_manager(employee_id: str) -> bool:
+def is_manager(employee_id):
     conn = get_db()
-    row = conn.execute(
-        "SELECT COUNT(*) as count FROM employees WHERE manager_id = ?",
-        (employee_id,),
-    ).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM employees WHERE manager_id = %s", (employee_id,))
+    count = c.fetchone()[0]
     conn.close()
-    return row["count"] > 0 if row else False
+    return count > 0
 
 
-def get_department_stats(manager_id: str) -> dict:
+def get_department_stats(manager_id):
     conn = get_db()
-    headcount = conn.execute(
-        "SELECT COUNT(*) as count FROM employees WHERE manager_id = ?",
-        (manager_id,),
-    ).fetchone()["count"]
-
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM employees WHERE manager_id = %s", (manager_id,))
+    headcount = c.fetchone()[0]
     today = date.today().isoformat()
-    on_leave = conn.execute(
-        """SELECT COUNT(DISTINCT employee_id) as count FROM leave_requests 
-           WHERE approver_id = ? AND status = 'approved' 
-           AND start_date <= ? AND end_date >= ?""",
-        (manager_id, today, today),
-    ).fetchone()["count"]
-
-    pending_approvals = conn.execute(
-        "SELECT COUNT(*) as count FROM leave_requests WHERE approver_id = ? AND status = 'pending'",
-        (manager_id,),
-    ).fetchone()["count"]
-
+    c.execute("SELECT COUNT(DISTINCT employee_id) FROM leave_requests WHERE approver_id = %s AND status = 'approved' AND start_date <= %s AND end_date >= %s", (manager_id, today, today))
+    on_leave = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM leave_requests WHERE approver_id = %s AND status = 'pending'", (manager_id,))
+    pending = c.fetchone()[0]
     att = get_team_attendance(manager_id)
     present_count = sum(1 for a in att if a["status"] in ("present", "remote"))
-    avg_attendance = round((present_count / headcount * 100) if headcount > 0 else 0)
-
+    avg_att = round((present_count / headcount * 100) if headcount > 0 else 0)
     conn.close()
-    return {
-        "headcount": headcount,
-        "on_leave": on_leave,
-        "pending_approvals": pending_approvals,
-        "avg_attendance": avg_attendance,
-    }
+    return {"headcount": headcount, "on_leave": on_leave, "pending_approvals": pending, "avg_attendance": avg_att}
 
 
+# ── Attendance CRUD ─────────────────────────────────────
 
-# -- Attendance CRUD -------------------------------------
-
-def clock_in(emp_id: str, location: str = "office") -> dict:
-    """Clock in for today. Returns attendance record."""
+def clock_in(emp_id, location="office"):
     conn = get_db()
+    c = conn.cursor()
     today = str(date.today())
     now = datetime.now().strftime("%H:%M")
-    
-    existing = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
-    
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
+    existing = _fetchone(c)
     if existing and existing["clock_in"]:
         conn.close()
-        return {"error": f"Already clocked in at {existing['clock_in']}", "record": dict(existing)}
-    
-    # Determine if late (after 08:30)
+        return {"error": f"Already clocked in at {existing['clock_in']}", "record": existing}
     hour, minute = map(int, now.split(":"))
     status = "late" if (hour > 8 or (hour == 8 and minute > 30)) else "present"
-    
     if existing:
-        conn.execute(
-            "UPDATE attendance_records SET clock_in = ?, status = ?, location = ? WHERE employee_id = ? AND date = ?",
-            (now, status, location, emp_id, today)
-        )
+        c.execute("UPDATE attendance_records SET clock_in = %s, status = %s, location = %s WHERE employee_id = %s AND date = %s", (now, status, location, emp_id, today))
     else:
-        conn.execute(
-            "INSERT INTO attendance_records (employee_id, date, clock_in, status, location) VALUES (?,?,?,?,?)",
-            (emp_id, today, now, status, location)
-        )
+        c.execute("INSERT INTO attendance_records (employee_id, date, clock_in, status, location) VALUES (%s,%s,%s,%s,%s)", (emp_id, today, now, status, location))
     conn.commit()
-    row = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def clock_out(emp_id: str) -> dict:
-    """Clock out for today. Calculates hours worked."""
+def clock_out(emp_id):
     conn = get_db()
+    c = conn.cursor()
     today = str(date.today())
     now = datetime.now().strftime("%H:%M")
-    
-    existing = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
-    
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
+    existing = _fetchone(c)
     if not existing or not existing["clock_in"]:
         conn.close()
         return {"error": "Not clocked in today"}
-    
     if existing["clock_out"]:
         conn.close()
-        return {"error": f"Already clocked out at {existing['clock_out']}", "record": dict(existing)}
-    
-    # Calculate hours
+        return {"error": f"Already clocked out at {existing['clock_out']}", "record": existing}
     ci_h, ci_m = map(int, existing["clock_in"].split(":"))
     co_h, co_m = map(int, now.split(":"))
     hours = round((co_h * 60 + co_m - ci_h * 60 - ci_m) / 60, 2)
     overtime = max(0, round(hours - 8, 2))
-    
-    conn.execute(
-        "UPDATE attendance_records SET clock_out = ?, hours_worked = ?, overtime_hours = ? WHERE employee_id = ? AND date = ?",
-        (now, hours, overtime, emp_id, today)
-    )
+    c.execute("UPDATE attendance_records SET clock_out = %s, hours_worked = %s, overtime_hours = %s WHERE employee_id = %s AND date = %s", (now, hours, overtime, emp_id, today))
     conn.commit()
-    row = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_my_attendance(emp_id: str, days: int = 7) -> list[dict]:
-    """Get attendance records for last N days."""
+def get_my_attendance(emp_id, days=7):
     conn = get_db()
+    c = conn.cursor()
     since = str(date.today() - timedelta(days=days))
-    rows = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date >= ? ORDER BY date DESC",
-        (emp_id, since)
-    ).fetchall()
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date >= %s ORDER BY date DESC", (emp_id, since))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_today_attendance(emp_id: str) -> dict | None:
-    """Get today's attendance record."""
+def get_today_attendance(emp_id):
     conn = get_db()
-    today = str(date.today())
-    row = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, str(date.today())))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
-def request_overtime(emp_id: str, hours: float, reason: str) -> dict:
-    """Request overtime approval for today."""
+def request_overtime(emp_id, hours, reason):
     conn = get_db()
+    c = conn.cursor()
     today = str(date.today())
-    conn.execute(
-        "UPDATE attendance_records SET overtime_hours = ?, overtime_status = 'pending', notes = ? WHERE employee_id = ? AND date = ?",
-        (hours, reason, emp_id, today)
-    )
+    c.execute("UPDATE attendance_records SET overtime_hours = %s, overtime_status = 'pending', notes = %s WHERE employee_id = %s AND date = %s", (hours, reason, emp_id, today))
     conn.commit()
-    row = conn.execute(
-        "SELECT * FROM attendance_records WHERE employee_id = ? AND date = ?",
-        (emp_id, today)
-    ).fetchone()
+    c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else {"error": "No attendance record for today"}
+    return row if row else {"error": "No attendance record for today"}
 
 
-# -- Interview CRUD --------------------------------------
+# ── Interview CRUD ──────────────────────────────────────
 
 QUESTION_BANK = {
     "hr_screening": [
@@ -1039,38 +743,36 @@ QUESTION_BANK = {
 }
 
 
-def start_interview(interviewer_id: str, candidate_name: str, position: str, stage: str = "hr_screening") -> dict:
-    """Create a new interview session."""
+def start_interview(interviewer_id, candidate_name, position, stage="hr_screening"):
     conn = get_db()
-    count = conn.execute("SELECT COUNT(*) FROM interviews").fetchone()[0]
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM interviews")
+    count = c.fetchone()[0]
     ref = f"INT-2026-{count + 1:03d}"
     questions = QUESTION_BANK.get(stage, QUESTION_BANK["hr_screening"])
-    
-    conn.execute(
-        "INSERT INTO interviews (ref, candidate_name, position, interviewer_id, stage, total_questions) VALUES (?,?,?,?,?,?)",
-        (ref, candidate_name, position, interviewer_id, stage, len(questions))
-    )
+    c.execute("INSERT INTO interviews (ref, candidate_name, position, interviewer_id, stage, total_questions) VALUES (%s,%s,%s,%s,%s,%s)",
+        (ref, candidate_name, position, interviewer_id, stage, len(questions)))
     conn.commit()
-    row = conn.execute("SELECT * FROM interviews WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM interviews WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_current_interview(interviewer_id: str) -> dict | None:
-    """Get the active interview for this interviewer."""
+def get_current_interview(interviewer_id):
     conn = get_db()
-    row = conn.execute(
-        "SELECT * FROM interviews WHERE interviewer_id = ? AND status = 'in_progress' ORDER BY started_at DESC LIMIT 1",
-        (interviewer_id,)
-    ).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM interviews WHERE interviewer_id = %s AND status = 'in_progress' ORDER BY started_at DESC LIMIT 1", (interviewer_id,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
-def get_interview_question(interview_id: int, question_number: int) -> dict | None:
-    """Get a specific question from the bank."""
+def get_interview_question(interview_id, question_number):
     conn = get_db()
-    interview = conn.execute("SELECT * FROM interviews WHERE id = ?", (interview_id,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM interviews WHERE id = %s", (interview_id,))
+    interview = _fetchone(c)
     conn.close()
     if not interview:
         return None
@@ -1082,496 +784,429 @@ def get_interview_question(interview_id: int, question_number: int) -> dict | No
     return {"question": q["q"], "type": q["type"], "time_minutes": q["time"], "number": question_number + 1, "total": len(questions)}
 
 
-def score_answer(interview_id: int, question_number: int, score: int, feedback: str = "") -> dict:
-    """Score a candidate's answer (1-5)."""
+def score_answer(interview_id, question_number, score, feedback=""):
     conn = get_db()
-    interview = conn.execute("SELECT * FROM interviews WHERE id = ?", (interview_id,)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM interviews WHERE id = %s", (interview_id,))
+    interview = _fetchone(c)
     if not interview:
         conn.close()
         return {"error": "Interview not found"}
-    
     stage = interview["stage"]
     questions = QUESTION_BANK.get(stage, QUESTION_BANK["hr_screening"])
     if question_number < 0 or question_number >= len(questions):
         conn.close()
         return {"error": "Invalid question number"}
-    
     q = questions[question_number]
     score = max(1, min(5, score))
-    
-    # Upsert response
-    existing = conn.execute(
-        "SELECT id FROM interview_responses WHERE interview_id = ? AND question_number = ?",
-        (interview_id, question_number)
-    ).fetchone()
-    
+    c.execute("SELECT id FROM interview_responses WHERE interview_id = %s AND question_number = %s", (interview_id, question_number))
+    existing = _fetchone(c)
     if existing:
-        conn.execute(
-            "UPDATE interview_responses SET score = ?, feedback = ?, answered_at = datetime('now') WHERE id = ?",
-            (score, feedback, existing["id"])
-        )
+        c.execute("UPDATE interview_responses SET score = %s, feedback = %s, answered_at = NOW() WHERE id = %s", (score, feedback, existing["id"]))
     else:
-        conn.execute(
-            "INSERT INTO interview_responses (interview_id, question_number, question_text, question_type, score, feedback) VALUES (?,?,?,?,?,?)",
-            (interview_id, question_number, q["q"], q["type"], score, feedback)
-        )
-    
-    # Update current question pointer
-    next_q = question_number + 1
-    conn.execute("UPDATE interviews SET current_question = ? WHERE id = ?", (next_q, interview_id))
+        c.execute("INSERT INTO interview_responses (interview_id, question_number, question_text, question_type, score, feedback) VALUES (%s,%s,%s,%s,%s,%s)",
+            (interview_id, question_number, q["q"], q["type"], score, feedback))
+    c.execute("UPDATE interviews SET current_question = %s WHERE id = %s", (question_number + 1, interview_id))
     conn.commit()
-    
-    row = conn.execute("SELECT * FROM interview_responses WHERE interview_id = ? AND question_number = ?",
-                       (interview_id, question_number)).fetchone()
+    c.execute("SELECT * FROM interview_responses WHERE interview_id = %s AND question_number = %s", (interview_id, question_number))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def complete_interview(interview_id: int) -> dict:
-    """Complete the interview and calculate final score."""
+def complete_interview(interview_id):
     conn = get_db()
-    responses = conn.execute(
-        "SELECT score FROM interview_responses WHERE interview_id = ?", (interview_id,)
-    ).fetchall()
-    
+    c = conn.cursor()
+    c.execute("SELECT score FROM interview_responses WHERE interview_id = %s", (interview_id,))
+    responses = _fetchall(c)
     if not responses:
         conn.close()
         return {"error": "No responses recorded"}
-    
     avg = round(sum(r["score"] for r in responses) / len(responses), 1)
-    conn.execute(
-        "UPDATE interviews SET status = 'completed', completed_at = datetime('now'), average_score = ? WHERE id = ?",
-        (avg, interview_id)
-    )
+    c.execute("UPDATE interviews SET status = 'completed', completed_at = NOW(), average_score = %s WHERE id = %s", (avg, interview_id))
     conn.commit()
-    row = conn.execute("SELECT * FROM interviews WHERE id = ?", (interview_id,)).fetchone()
+    c.execute("SELECT * FROM interviews WHERE id = %s", (interview_id,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_interview_responses(interview_id: int) -> list[dict]:
-    """Get all responses for an interview."""
+def get_interview_responses(interview_id):
     conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM interview_responses WHERE interview_id = ? ORDER BY question_number",
-        (interview_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM interview_responses WHERE interview_id = %s ORDER BY question_number", (interview_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
+# ── Performance CRUD ────────────────────────────────────
 
-def _seed_training_courses(c):
-    courses = [
-        ("Safety Compliance", "OSHA workplace safety standards and emergency procedures", "Internal", 8, "compliance", 1),
-        ("Leadership Workshop", "Developing leadership skills for mid-level managers", "Dale Carnegie", 16, "leadership", 0),
-        ("Excel Advanced", "Pivot tables, VLOOKUP, macros, and data analysis", "Microsoft", 6, "technical", 0),
-        ("Project Management Professional", "PMP preparation and Agile methodology", "PMI", 40, "professional", 0),
-        ("Cybersecurity Awareness", "Phishing prevention, password security, data protection", "Internal", 4, "compliance", 1),
-        ("First Aid & CPR", "Emergency response and basic life support certification", "Red Crescent", 8, "safety", 1),
-        ("Business Communication", "Professional writing and presentation skills", "External", 12, "professional", 0),
-        ("Arabic Business Writing", "Formal correspondence and report writing in Arabic", "Internal", 6, "language", 0),
-    ]
-    for title, desc, provider, hours, cat, mandatory in courses:
-        c.execute("INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory) VALUES (?,?,?,?,?,?)",
-                  (title, desc, provider, hours, cat, mandatory))
-
-
-# -- Performance Review CRUD -----------------------------
-
-def create_review(reviewer_id: str, employee_id: str, period: str, rating: int, strengths: str, improvements: str, comments: str = "") -> dict:
+def create_review(reviewer_id, employee_id, period, rating, strengths, improvements, comments=""):
     conn = get_db()
+    c = conn.cursor()
     rating = max(1, min(5, rating))
-    goals = conn.execute("SELECT COUNT(*) as total, SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END) as met FROM performance_goals WHERE employee_id = ?", (employee_id,)).fetchone()
-    conn.execute(
-        "INSERT INTO performance_reviews (employee_id, reviewer_id, period, rating, goals_met, total_goals, strengths, improvements, comments, status) VALUES (?,?,?,?,?,?,?,?,?,'completed')",
-        (employee_id, reviewer_id, period, rating, goals["met"] or 0, goals["total"] or 0, strengths, improvements, comments)
-    )
+    c.execute("SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END), 0) as met FROM performance_goals WHERE employee_id = %s", (employee_id,))
+    goals = _fetchone(c)
+    c.execute("INSERT INTO performance_reviews (employee_id, reviewer_id, period, rating, goals_met, total_goals, strengths, improvements, comments, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'completed')",
+        (employee_id, reviewer_id, period, rating, goals["met"] or 0, goals["total"] or 0, strengths, improvements, comments))
     conn.commit()
-    row = conn.execute("SELECT * FROM performance_reviews WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1", (employee_id,)).fetchone()
+    c.execute("SELECT * FROM performance_reviews WHERE employee_id = %s ORDER BY created_at DESC LIMIT 1", (employee_id,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_employee_reviews(emp_id: str) -> list[dict]:
+def get_employee_reviews(emp_id):
     conn = get_db()
-    rows = conn.execute("SELECT pr.*, e.name as reviewer_name FROM performance_reviews pr LEFT JOIN employees e ON pr.reviewer_id = e.id WHERE pr.employee_id = ? ORDER BY created_at DESC", (emp_id,)).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT pr.*, e.name as reviewer_name FROM performance_reviews pr LEFT JOIN employees e ON pr.reviewer_id = e.id WHERE pr.employee_id = %s ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_pending_reviews(reviewer_id: str) -> list[dict]:
+def get_pending_reviews(reviewer_id):
     conn = get_db()
+    c = conn.cursor()
     reports = get_direct_reports(reviewer_id)
     report_ids = [r["id"] for r in reports]
     if not report_ids:
         conn.close()
         return []
-    reviewed = conn.execute("SELECT employee_id FROM performance_reviews WHERE reviewer_id = ? AND period = ?", (reviewer_id, "Q1 2026")).fetchall()
+    c.execute("SELECT employee_id FROM performance_reviews WHERE reviewer_id = %s AND period = %s", (reviewer_id, "Q1 2026"))
+    reviewed = _fetchall(c)
     reviewed_ids = {r["employee_id"] for r in reviewed}
     pending = [r for r in reports if r["id"] not in reviewed_ids]
     conn.close()
     return pending
 
 
-def set_goal(emp_id: str, goal: str, target: str, due_date: str) -> dict:
+def set_goal(emp_id, goal, target, due_date):
     conn = get_db()
-    conn.execute("INSERT INTO performance_goals (employee_id, goal, target, due_date) VALUES (?,?,?,?)", (emp_id, goal, target, due_date))
+    c = conn.cursor()
+    c.execute("INSERT INTO performance_goals (employee_id, goal, target, due_date) VALUES (%s,%s,%s,%s)", (emp_id, goal, target, due_date))
     conn.commit()
-    row = conn.execute("SELECT * FROM performance_goals WHERE employee_id = ? ORDER BY id DESC LIMIT 1", (emp_id,)).fetchone()
+    c.execute("SELECT * FROM performance_goals WHERE employee_id = %s ORDER BY id DESC LIMIT 1", (emp_id,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_goals(emp_id: str) -> list[dict]:
+def get_goals(emp_id):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM performance_goals WHERE employee_id = ? ORDER BY due_date", (emp_id,)).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM performance_goals WHERE employee_id = %s ORDER BY due_date", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def update_goal_progress(goal_id: int, progress: int) -> dict:
+def update_goal_progress(goal_id, progress):
     conn = get_db()
+    c = conn.cursor()
     progress = max(0, min(100, progress))
     status = "completed" if progress >= 100 else "active"
-    conn.execute("UPDATE performance_goals SET progress = ?, status = ? WHERE id = ?", (progress, status, goal_id))
+    c.execute("UPDATE performance_goals SET progress = %s, status = %s WHERE id = %s", (progress, status, goal_id))
     conn.commit()
-    row = conn.execute("SELECT * FROM performance_goals WHERE id = ?", (goal_id,)).fetchone()
+    c.execute("SELECT * FROM performance_goals WHERE id = %s", (goal_id,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else {"error": "Goal not found"}
+    return row if row else {"error": "Goal not found"}
 
 
-# -- Training CRUD ---------------------------------------
+# ── Training CRUD ───────────────────────────────────────
 
-def get_available_courses() -> list[dict]:
+def get_available_courses():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM training_courses WHERE status = 'available' ORDER BY mandatory DESC, title").fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM training_courses WHERE status = 'available' ORDER BY mandatory DESC, title")
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def enroll_in_course(emp_id: str, course_id: int) -> dict:
+def enroll_in_course(emp_id, course_id):
     conn = get_db()
-    existing = conn.execute("SELECT * FROM employee_trainings WHERE employee_id = ? AND course_id = ? AND status != 'dropped'", (emp_id, course_id)).fetchone()
+    c = conn.cursor()
+    c.execute("SELECT * FROM employee_trainings WHERE employee_id = %s AND course_id = %s AND status != 'dropped'", (emp_id, course_id))
+    existing = _fetchone(c)
     if existing:
         conn.close()
-        return {"error": "Already enrolled", "record": dict(existing)}
-    conn.execute("INSERT INTO employee_trainings (employee_id, course_id) VALUES (?,?)", (emp_id, course_id))
+        return {"error": "Already enrolled", "record": existing}
+    c.execute("INSERT INTO employee_trainings (employee_id, course_id) VALUES (%s,%s)", (emp_id, course_id))
     conn.commit()
-    row = conn.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND et.course_id = ?", (emp_id, course_id)).fetchone()
+    c.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = %s AND et.course_id = %s", (emp_id, course_id))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_my_trainings(emp_id: str) -> list[dict]:
+def get_my_trainings(emp_id):
     conn = get_db()
-    rows = conn.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category, tc.mandatory FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? ORDER BY et.enrollment_date DESC", (emp_id,)).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category, tc.mandatory FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = %s ORDER BY et.enrollment_date DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def complete_training(emp_id: str, course_id: int, score: float) -> dict:
+def complete_training(emp_id, course_id, score):
     conn = get_db()
+    c = conn.cursor()
     cert_ref = f"CERT-{emp_id}-{course_id}-2026"
-    conn.execute("UPDATE employee_trainings SET status = 'completed', completion_date = date('now'), score = ?, certificate_ref = ? WHERE employee_id = ? AND course_id = ?", (score, cert_ref, emp_id, course_id))
+    c.execute("UPDATE employee_trainings SET status = 'completed', completion_date = CURRENT_DATE::TEXT, score = %s, certificate_ref = %s WHERE employee_id = %s AND course_id = %s", (score, cert_ref, emp_id, course_id))
     conn.commit()
-    row = conn.execute("SELECT et.*, tc.title FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND et.course_id = ?", (emp_id, course_id)).fetchone()
+    c.execute("SELECT et.*, tc.title FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = %s AND et.course_id = %s", (emp_id, course_id))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else {"error": "Enrollment not found"}
+    return row if row else {"error": "Enrollment not found"}
 
 
-def get_training_stats(emp_id: str) -> dict:
+def get_training_stats(emp_id):
     conn = get_db()
-    total = conn.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = ?", (emp_id,)).fetchone()[0]
-    completed = conn.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = ? AND status = 'completed'", (emp_id,)).fetchone()[0]
-    mandatory_total = conn.execute("SELECT COUNT(*) FROM training_courses WHERE mandatory = 1").fetchone()[0]
-    mandatory_done = conn.execute("SELECT COUNT(*) FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND tc.mandatory = 1 AND et.status = 'completed'", (emp_id,)).fetchone()[0]
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = %s", (emp_id,))
+    total = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = %s AND status = 'completed'", (emp_id,))
+    completed = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM training_courses WHERE mandatory = 1")
+    mandatory_total = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = %s AND tc.mandatory = 1 AND et.status = 'completed'", (emp_id,))
+    mandatory_done = c.fetchone()[0]
     conn.close()
     return {"total_enrolled": total, "completed": completed, "mandatory_total": mandatory_total, "mandatory_completed": mandatory_done, "compliance": round((mandatory_done / mandatory_total * 100) if mandatory_total > 0 else 100)}
 
 
-# -- Grievance CRUD --------------------------------------
+# ── Grievance CRUD ──────────────────────────────────────
 
-def submit_grievance(emp_id: str, category: str, subject: str, description: str, severity: str = "medium") -> dict:
+def submit_grievance(emp_id, category, subject, description, severity="medium"):
     conn = get_db()
-    count = conn.execute("SELECT COUNT(*) FROM grievances").fetchone()[0]
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM grievances")
+    count = c.fetchone()[0]
     ref = f"GRV-2026-{count + 1:03d}"
-    conn.execute("INSERT INTO grievances (ref, employee_id, category, subject, description, severity) VALUES (?,?,?,?,?,?)", (ref, emp_id, category, subject, description, severity))
+    c.execute("INSERT INTO grievances (ref, employee_id, category, subject, description, severity) VALUES (%s,%s,%s,%s,%s,%s)", (ref, emp_id, category, subject, description, severity))
     conn.commit()
-    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM grievances WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row)
+    return row
 
 
-def get_my_grievances(emp_id: str) -> list[dict]:
+def get_my_grievances(emp_id):
     conn = get_db()
-    rows = conn.execute("SELECT * FROM grievances WHERE employee_id = ? ORDER BY submitted_at DESC", (emp_id,)).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM grievances WHERE employee_id = %s ORDER BY submitted_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_all_grievances() -> list[dict]:
+def get_all_grievances():
     conn = get_db()
-    rows = conn.execute("SELECT g.*, e.name as employee_name FROM grievances g JOIN employees e ON g.employee_id = e.id ORDER BY submitted_at DESC").fetchall()
+    c = conn.cursor()
+    c.execute("SELECT g.*, e.name as employee_name FROM grievances g JOIN employees e ON g.employee_id = e.id ORDER BY submitted_at DESC")
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def update_grievance_status(ref: str, status: str, resolution: str = "") -> dict:
+def update_grievance_status(ref, status, resolution=""):
     conn = get_db()
-    updates = "status = ?"
-    params = [status]
+    c = conn.cursor()
     if status in ("resolved", "closed"):
-        updates += ", resolved_at = datetime('now'), resolution = ?"
-        params.append(resolution)
-    params.append(ref)
-    conn.execute(f"UPDATE grievances SET {updates} WHERE ref = ?", params)
+        c.execute("UPDATE grievances SET status = %s, resolved_at = NOW(), resolution = %s WHERE ref = %s", (status, resolution, ref))
+    else:
+        c.execute("UPDATE grievances SET status = %s WHERE ref = %s", (status, ref))
     conn.commit()
-    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM grievances WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else {"error": "Not found"}
+    return row if row else {"error": "Not found"}
 
 
-# -- Notifications CRUD ----------------------------------
+# ── Notifications ───────────────────────────────────────
 
-def create_notification(emp_id: str, ntype: str, title: str, message: str) -> dict:
+def create_notification(emp_id, ntype, title, message):
     conn = get_db()
-    conn.execute("INSERT INTO notifications (employee_id, type, title, message) VALUES (?,?,?,?)", (emp_id, ntype, title, message))
-    conn.commit()
-    conn.close()
-    return {"ok": True}
-
-
-def get_unread_notifications(emp_id: str) -> list[dict]:
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM notifications WHERE employee_id = ? AND read = 0 ORDER BY created_at DESC", (emp_id,)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def get_all_notifications(emp_id: str, limit: int = 20) -> list[dict]:
-    conn = get_db()
-    rows = conn.execute("SELECT * FROM notifications WHERE employee_id = ? ORDER BY created_at DESC LIMIT ?", (emp_id, limit)).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-def mark_notification_read(notif_id: int) -> dict:
-    conn = get_db()
-    conn.execute("UPDATE notifications SET read = 1 WHERE id = ?", (notif_id,))
+    c = conn.cursor()
+    c.execute("INSERT INTO notifications (employee_id, type, title, message) VALUES (%s,%s,%s,%s)", (emp_id, ntype, title, message))
     conn.commit()
     conn.close()
     return {"ok": True}
 
 
-
-
-# -- Manager: Loan Approvals -----------------------------
-
-def get_pending_loan_requests(manager_id: str) -> list[dict]:
-    """Get pending loan requests from direct reports."""
+def get_unread_notifications(emp_id):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT l.*, e.name as employee_name, e.position, e.department, e.basic_salary
-           FROM loans l JOIN employees e ON l.employee_id = e.id 
-           WHERE e.manager_id = ? AND l.status = 'pending'
-           ORDER BY l.created_at DESC""",
-        (manager_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT * FROM notifications WHERE employee_id = %s AND read = 0 ORDER BY created_at DESC", (emp_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def approve_loan(ref: str, decision: str, notes: str = "") -> dict | None:
-    """Approve or reject a loan. decision: 'approved' or 'rejected'."""
+def get_all_notifications(emp_id, limit=20):
     conn = get_db()
-    conn.execute(
-        "UPDATE loans SET status = ? WHERE ref = ? AND status = 'pending'",
-        (decision, ref)
-    )
+    c = conn.cursor()
+    c.execute("SELECT * FROM notifications WHERE employee_id = %s ORDER BY created_at DESC LIMIT %s", (emp_id, limit))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def mark_notification_read(notif_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE notifications SET read = 1 WHERE id = %s", (notif_id,))
     conn.commit()
-    row = conn.execute(
-        "SELECT l.*, e.name as employee_name FROM loans l JOIN employees e ON l.employee_id = e.id WHERE l.ref = ?",
-        (ref,)
-    ).fetchone()
+    conn.close()
+    return {"ok": True}
+
+
+# ── Manager Extended ────────────────────────────────────
+
+def get_pending_loan_requests(manager_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT l.*, e.name as employee_name, e.position, e.department, e.basic_salary FROM loans l JOIN employees e ON l.employee_id = e.id WHERE e.manager_id = %s AND l.status = 'pending' ORDER BY l.created_at DESC", (manager_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def approve_loan(ref, decision, notes=""):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE loans SET status = %s WHERE ref = %s AND status = 'pending'", (decision, ref))
+    conn.commit()
+    c.execute("SELECT l.*, e.name as employee_name FROM loans l JOIN employees e ON l.employee_id = e.id WHERE l.ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
     if row:
-        d = dict(row)
-        # Notify employee
-        create_notification(d["employee_id"], "loan", 
-            f"Loan {decision.title()}", 
-            f"Your loan request {ref} for {d['amount']:,.0f} SAR has been {decision}.")
-        return d
-    return None
+        create_notification(row["employee_id"], "loan", f"Loan {decision.title()}", f"Your loan {ref} for {row['amount']:,.0f} SAR has been {decision}.")
+    return row
 
 
-# -- Manager: Travel Approvals ---------------------------
-
-def get_pending_travel_requests(manager_id: str) -> list[dict]:
+def get_pending_travel_requests(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT t.*, e.name as employee_name, e.position, e.department
-           FROM travel_requests t JOIN employees e ON t.employee_id = e.id
-           WHERE e.manager_id = ? AND t.status = 'pending'
-           ORDER BY t.created_at DESC""",
-        (manager_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT t.*, e.name as employee_name, e.position, e.department FROM travel_requests t JOIN employees e ON t.employee_id = e.id WHERE e.manager_id = %s AND t.status = 'pending' ORDER BY t.created_at DESC", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def approve_travel(ref: str, decision: str) -> dict | None:
+def approve_travel(ref, decision):
     conn = get_db()
-    conn.execute("UPDATE travel_requests SET status = ? WHERE ref = ? AND status = 'pending'", (decision, ref))
+    c = conn.cursor()
+    c.execute("UPDATE travel_requests SET status = %s WHERE ref = %s AND status = 'pending'", (decision, ref))
     conn.commit()
-    row = conn.execute(
-        "SELECT t.*, e.name as employee_name FROM travel_requests t JOIN employees e ON t.employee_id = e.id WHERE t.ref = ?",
-        (ref,)
-    ).fetchone()
+    c.execute("SELECT t.*, e.name as employee_name FROM travel_requests t JOIN employees e ON t.employee_id = e.id WHERE t.ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
     if row:
-        d = dict(row)
-        create_notification(d["employee_id"], "travel",
-            f"Travel {decision.title()}",
-            f"Your travel request {ref} to {d['destination']} has been {decision}.")
-        return d
-    return None
+        create_notification(row["employee_id"], "travel", f"Travel {decision.title()}", f"Your travel {ref} to {row['destination']} has been {decision}.")
+    return row
 
 
-# -- Manager: Overtime Approvals -------------------------
-
-def get_pending_overtime_requests(manager_id: str) -> list[dict]:
+def get_pending_overtime_requests(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT a.*, e.name as employee_name, e.position
-           FROM attendance_records a JOIN employees e ON a.employee_id = e.id
-           WHERE e.manager_id = ? AND a.overtime_status = 'pending'
-           ORDER BY a.date DESC""",
-        (manager_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT a.*, e.name as employee_name, e.position FROM attendance_records a JOIN employees e ON a.employee_id = e.id WHERE e.manager_id = %s AND a.overtime_status = 'pending' ORDER BY a.date DESC", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def approve_overtime(record_id: int, decision: str) -> dict | None:
+def approve_overtime(record_id, decision):
     conn = get_db()
-    conn.execute("UPDATE attendance_records SET overtime_status = ? WHERE id = ?", (decision, record_id))
+    c = conn.cursor()
+    c.execute("UPDATE attendance_records SET overtime_status = %s WHERE id = %s", (decision, record_id))
     conn.commit()
-    row = conn.execute(
-        "SELECT a.*, e.name as employee_name FROM attendance_records a JOIN employees e ON a.employee_id = e.id WHERE a.id = ?",
-        (record_id,)
-    ).fetchone()
+    c.execute("SELECT a.*, e.name as employee_name FROM attendance_records a JOIN employees e ON a.employee_id = e.id WHERE a.id = %s", (record_id,))
+    row = _fetchone(c)
     conn.close()
     if row:
-        d = dict(row)
-        create_notification(d["employee_id"], "attendance",
-            f"Overtime {decision.title()}",
-            f"Your overtime request for {d['overtime_hours']}h on {d['date']} has been {decision}.")
-        return d
-    return None
+        create_notification(row["employee_id"], "attendance", f"Overtime {decision.title()}", f"Your overtime request for {row['overtime_hours']}h on {row['date']} has been {decision}.")
+    return row
 
 
-# -- Manager: Document Approvals -------------------------
-
-def get_pending_document_requests(manager_id: str) -> list[dict]:
+def get_pending_document_requests(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT d.*, e.name as employee_name, e.position
-           FROM document_requests d JOIN employees e ON d.employee_id = e.id
-           WHERE e.manager_id = ? AND d.status IN ('requested', 'processing')
-           ORDER BY d.created_at DESC""",
-        (manager_id,)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT d.*, e.name as employee_name, e.position FROM document_requests d JOIN employees e ON d.employee_id = e.id WHERE e.manager_id = %s AND d.status IN ('requested', 'processing') ORDER BY d.created_at DESC", (manager_id,))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def approve_document(ref: str, decision: str) -> dict | None:
-    """decision: 'ready' (approved) or 'rejected'."""
+def approve_document(ref, decision):
     conn = get_db()
-    conn.execute("UPDATE document_requests SET status = ? WHERE ref = ?", (decision, ref))
+    c = conn.cursor()
+    c.execute("UPDATE document_requests SET status = %s WHERE ref = %s", (decision, ref))
     conn.commit()
-    row = conn.execute(
-        "SELECT d.*, e.name as employee_name FROM document_requests d JOIN employees e ON d.employee_id = e.id WHERE d.ref = ?",
-        (ref,)
-    ).fetchone()
+    c.execute("SELECT d.*, e.name as employee_name FROM document_requests d JOIN employees e ON d.employee_id = e.id WHERE d.ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
     if row:
-        d = dict(row)
-        create_notification(d["employee_id"], "document",
-            f"Document {decision.title()}",
-            f"Your {d['document_type']} request ({ref}) status: {decision}.")
-        return d
-    return None
+        create_notification(row["employee_id"], "document", f"Document {decision.title()}", f"Your {row['document_type']} ({ref}) status: {decision}.")
+    return row
 
 
-# -- Manager: Grievance Management -----------------------
-
-def get_department_grievances(manager_id: str) -> list[dict]:
+def get_department_grievances(manager_id):
     conn = get_db()
-    rows = conn.execute(
-        """SELECT g.*, e.name as employee_name, e.position
-           FROM grievances g JOIN employees e ON g.employee_id = e.id
-           WHERE e.manager_id = ? OR g.assigned_to = ?
-           ORDER BY g.submitted_at DESC""",
-        (manager_id, manager_id)
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT g.*, e.name as employee_name, e.position FROM grievances g JOIN employees e ON g.employee_id = e.id WHERE e.manager_id = %s OR g.assigned_to = %s ORDER BY g.submitted_at DESC", (manager_id, manager_id))
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def assign_grievance(ref: str, assigned_to: str) -> dict | None:
+def assign_grievance(ref, assigned_to):
     conn = get_db()
-    conn.execute("UPDATE grievances SET assigned_to = ?, status = 'investigating' WHERE ref = ?", (assigned_to, ref))
+    c = conn.cursor()
+    c.execute("UPDATE grievances SET assigned_to = %s, status = 'investigating' WHERE ref = %s", (assigned_to, ref))
     conn.commit()
-    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    c.execute("SELECT * FROM grievances WHERE ref = %s", (ref,))
+    row = _fetchone(c)
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
-def resolve_grievance(ref: str, resolution: str) -> dict | None:
+def resolve_grievance(ref, resolution):
     return update_grievance_status(ref, "resolved", resolution)
 
 
-# -- Manager: Team Analytics ----------------------------
-
-def get_team_performance_summary(manager_id: str) -> list[dict]:
-    """Get performance overview for all direct reports."""
+def get_team_performance_summary(manager_id):
     conn = get_db()
+    c = conn.cursor()
     reports = get_direct_reports(manager_id)
     result = []
     for emp in reports:
         eid = emp["id"]
-        # Latest review
-        review = conn.execute("SELECT rating, period FROM performance_reviews WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1", (eid,)).fetchone()
-        # Goals
-        goals = conn.execute("SELECT COUNT(*) as total, SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END) as completed FROM performance_goals WHERE employee_id = ?", (eid,)).fetchone()
-        # Training
-        training = conn.execute("SELECT COUNT(*) as enrolled, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed FROM employee_trainings WHERE employee_id = ?", (eid,)).fetchone()
-        # Attendance this month
-        from datetime import date
+        c.execute("SELECT rating, period FROM performance_reviews WHERE employee_id = %s ORDER BY created_at DESC LIMIT 1", (eid,))
+        review = _fetchone(c)
+        c.execute("SELECT COUNT(*) as total, COALESCE(SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END), 0) as completed FROM performance_goals WHERE employee_id = %s", (eid,))
+        goals = _fetchone(c)
+        c.execute("SELECT COUNT(*) as enrolled, COALESCE(SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END), 0) as completed FROM employee_trainings WHERE employee_id = %s", (eid,))
+        training = _fetchone(c)
         month_start = date.today().replace(day=1).isoformat()
-        att = conn.execute("SELECT COUNT(*) as days, SUM(CASE WHEN status IN ('present','remote') THEN 1 ELSE 0 END) as present FROM attendance_records WHERE employee_id = ? AND date >= ?", (eid, month_start)).fetchone()
-        
+        c.execute("SELECT COUNT(*) as days, COALESCE(SUM(CASE WHEN status IN ('present','remote') THEN 1 ELSE 0 END), 0) as present FROM attendance_records WHERE employee_id = %s AND date >= %s", (eid, month_start))
+        att = _fetchone(c)
         result.append({
-            "employee_id": eid,
-            "name": emp["name"],
-            "position": emp["position"],
+            "employee_id": eid, "name": emp["name"], "position": emp["position"],
             "latest_rating": review["rating"] if review else None,
             "review_period": review["period"] if review else None,
-            "goals_total": goals["total"] or 0,
-            "goals_completed": goals["completed"] or 0,
-            "trainings_enrolled": training["enrolled"] or 0,
-            "trainings_completed": training["completed"] or 0,
-            "attendance_days": att["days"] or 0,
-            "attendance_present": att["present"] or 0,
+            "goals_total": goals["total"] or 0, "goals_completed": goals["completed"] or 0,
+            "trainings_enrolled": training["enrolled"] or 0, "trainings_completed": training["completed"] or 0,
+            "attendance_days": att["days"] or 0, "attendance_present": att["present"] or 0,
         })
     conn.close()
     return result
 
 
-def get_all_pending_for_manager(manager_id: str) -> dict:
-    """Get ALL pending items across all categories for a manager."""
+def get_all_pending_for_manager(manager_id):
     return {
         "leave_requests": get_pending_approvals(manager_id),
         "loan_requests": get_pending_loan_requests(manager_id),
@@ -1583,74 +1218,56 @@ def get_all_pending_for_manager(manager_id: str) -> dict:
     }
 
 
-def get_team_training_compliance(manager_id: str) -> list[dict]:
-    """Get training compliance for all direct reports."""
+def get_team_training_compliance(manager_id):
     reports = get_direct_reports(manager_id)
-    result = []
-    for emp in reports:
-        stats = get_training_stats(emp["id"])
-        result.append({
-            "employee_id": emp["id"],
-            "name": emp["name"],
-            "position": emp["position"],
-            **stats,
-        })
-    return result
+    return [{"employee_id": emp["id"], "name": emp["name"], "position": emp["position"], **get_training_stats(emp["id"])} for emp in reports]
 
 
-def reassign_employee(emp_id: str, new_manager_id: str) -> dict:
-    """Reassign an employee to a new manager."""
+def reassign_employee(emp_id, new_manager_id):
     conn = get_db()
-    conn.execute("UPDATE employees SET manager_id = ? WHERE id = ?", (new_manager_id, emp_id))
+    c = conn.cursor()
+    c.execute("UPDATE employees SET manager_id = %s WHERE id = %s", (new_manager_id, emp_id))
     conn.commit()
-    row = conn.execute("SELECT id, name, position, department, manager_id FROM employees WHERE id = ?", (emp_id,)).fetchone()
+    c.execute("SELECT id, name, position, department, manager_id FROM employees WHERE id = %s", (emp_id,))
+    row = _fetchone(c)
     conn.close()
     if row:
-        d = dict(row)
         mgr = get_employee(new_manager_id)
-        create_notification(emp_id, "hr",
-            "Manager Reassignment",
-            f"You have been reassigned to {mgr['name'] if mgr else new_manager_id}.")
-        return d
+        create_notification(emp_id, "hr", "Manager Reassignment", f"You have been reassigned to {mgr['name'] if mgr else new_manager_id}.")
+        return row
     return {"error": "Employee not found"}
 
 
-def get_headcount_by_department() -> list[dict]:
-    """Get headcount breakdown by department."""
+def get_headcount_by_department():
     conn = get_db()
-    rows = conn.execute(
-        "SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC"
-    ).fetchall()
+    c = conn.cursor()
+    c.execute("SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC")
+    rows = _fetchall(c)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
-def get_leave_analytics(manager_id: str) -> dict:
-    """Get leave analytics for manager's team."""
+def get_leave_analytics(manager_id):
     conn = get_db()
+    c = conn.cursor()
     reports = get_direct_reports(manager_id)
     report_ids = [r["id"] for r in reports]
     if not report_ids:
         conn.close()
         return {"total_requests": 0, "by_type": {}, "by_status": {}}
-    
-    placeholders = ",".join("?" * len(report_ids))
-    rows = conn.execute(f"SELECT leave_type, status, COUNT(*) as cnt FROM leave_requests WHERE employee_id IN ({placeholders}) GROUP BY leave_type, status", report_ids).fetchall()
-    
-    by_type = {}
-    by_status = {}
-    total = 0
+    placeholders = ",".join(["%s"] * len(report_ids))
+    c.execute(f"SELECT leave_type, status, COUNT(*) as cnt FROM leave_requests WHERE employee_id IN ({placeholders}) GROUP BY leave_type, status", report_ids)
+    rows = _fetchall(c)
+    by_type, by_status, total = {}, {}, 0
     for r in rows:
         by_type[r["leave_type"]] = by_type.get(r["leave_type"], 0) + r["cnt"]
         by_status[r["status"]] = by_status.get(r["status"], 0) + r["cnt"]
         total += r["cnt"]
-    
     conn.close()
     return {"total_requests": total, "by_type": by_type, "by_status": by_status}
 
 
-def get_employee_all_requests(emp_id: str) -> dict:
-    """Get ALL requests for an employee across all categories."""
+def get_employee_all_requests(emp_id):
     return {
         "leave_requests": get_leave_requests(emp_id),
         "loans": get_employee_loans(emp_id),
@@ -1658,16 +1275,6 @@ def get_employee_all_requests(emp_id: str) -> dict:
         "travel": get_travel_requests(emp_id),
         "grievances": get_my_grievances(emp_id),
     }
-
-
-def get_travel_requests(emp_id: str) -> list[dict]:
-    conn = get_db()
-    rows = conn.execute(
-        "SELECT * FROM travel_requests WHERE employee_id = ? ORDER BY created_at DESC",
-        (emp_id,)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
 
 
 # Auto-init on import

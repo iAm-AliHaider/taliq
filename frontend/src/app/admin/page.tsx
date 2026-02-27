@@ -3,20 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-// Admin API - tries local agent first, falls back to Vercel API
-const ADMIN_ENDPOINTS = [
-  "http://localhost:8082/api/admin",
-  "/api/admin",
-];
-
 async function adminFetch(params: string, options?: RequestInit): Promise<any> {
-  for (const base of ADMIN_ENDPOINTS) {
-    try {
-      const url = options?.method === "POST" ? `${base}${params}` : `${base}?${params}`;
-      const res = await fetch(url, { ...options, signal: AbortSignal.timeout(3000) });
-      if (res.ok) return res.json();
-    } catch { continue; }
-  }
+  try {
+    const url = options?.method === "POST" ? `/api/admin${params}` : `/api/admin?${params}`;
+    const res = await fetch(url, options);
+    if (res.ok) return res.json();
+  } catch { /* */ }
   return null;
 }
 
@@ -86,7 +78,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [editingManager, setEditingManager] = useState<string | null>(null);
   const [selectedManager, setSelectedManager] = useState("");
-  const [connected, setConnected] = useState(false);
+  
 
   useEffect(() => {
     try {
@@ -99,8 +91,7 @@ export default function AdminPage() {
   const loadData = useCallback(async () => {
     if (!authed) return;
     const ov = await adminFetch("section=overview");
-    if (ov && ov.totalEmployees > 0) {
-      setConnected(true);
+    if (ov) {
       setOverview(ov);
       adminFetch("section=employees").then(d => d && setEmployees(d));
       adminFetch("section=leaves").then(d => d && setLeaves(d));
@@ -108,8 +99,6 @@ export default function AdminPage() {
       adminFetch("section=documents").then(d => d && setDocuments(d));
       adminFetch("section=announcements").then(d => d && setAnnouncements(d));
       adminFetch("section=grievances").then(d => d && setGrievances(d));
-    } else {
-      setConnected(false);
     }
   }, [authed]);
 
@@ -163,25 +152,15 @@ export default function AdminPage() {
             <div><h1 className="text-base font-bold text-gray-900">Taliq Admin</h1></div>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-400"}`} title={connected ? "Connected to DB" : "DB offline"} />
-            <span className="text-[10px] text-gray-400">{connected ? "Live DB" : "Offline"}</span>
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-[10px] text-gray-400">Neon DB</span>
             <button onClick={loadData} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100">Refresh</button>
             <button onClick={() => router.push("/")} className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100">Back to App</button>
           </div>
         </div>
       </header>
 
-      {!connected && (
-        <div className="max-w-7xl mx-auto px-6 py-3">
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-            <svg className="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            <div>
-              <p className="text-sm font-medium text-amber-800">Agent Not Connected</p>
-              <p className="text-xs text-amber-600">The Taliq agent must be running locally for admin to show live data. Start the agent and click Refresh.</p>
-            </div>
-          </div>
-        </div>
-      )}
+      
 
       <div className="max-w-7xl mx-auto px-6 py-5">
         <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 overflow-x-auto">
