@@ -74,6 +74,7 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   EmployeeDetailCard,
   LeaveAnalyticsCard,
   HeadcountCard,
+  MyRequestsCard,
 };
 
 interface Props {

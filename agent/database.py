@@ -268,7 +268,23 @@ def init_db():
         created_at TIMESTAMP DEFAULT NOW()
     )""")
 
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS policies (
+        id SERIAL PRIMARY KEY,
+        category TEXT UNIQUE NOT NULL,
+        config JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMP DEFAULT NOW(),
+        updated_by TEXT
+    )""")
+
     conn.commit()
+
+    # Seed policies
+    c.execute("SELECT COUNT(*) FROM policies")
+    if c.fetchone()[0] == 0:
+        _seed_policies(c)
+        conn.commit()
 
     # Seed if empty
     c.execute("SELECT COUNT(*) FROM employees")
@@ -343,6 +359,104 @@ def _seed_training_courses(c):
     for title, desc, provider, hours, cat, mandatory in courses:
         c.execute("INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory) VALUES (%s,%s,%s,%s,%s,%s)",
                   (title, desc, provider, hours, cat, mandatory))
+
+
+
+
+# ── Policy defaults (used as fallback) ──────────────────
+
+DEFAULT_POLICIES = {
+    "leave": {"annual": 30, "sick": 30, "emergency": 5, "study": 15, "max_carry_over": 5, "min_notice_days": 3, "approval_required": True},
+    "loan": {"max_amount_multiplier": 2, "max_emi_percent": 33, "min_service_years": 1, "approval_required": True, "types": ["Interest-Free", "Advance Salary", "Personal", "Emergency"]},
+    "attendance": {"work_start": "08:00", "work_end": "17:00", "late_threshold": "08:30", "standard_hours": 8, "max_overtime_hours": 4, "overtime_approval": True},
+    "travel": {"max_days": 30, "approval_required": True, "per_diem_chairman_intl": 3500, "per_diem_chairman_local": 2000, "per_diem_clevel_intl": 1750, "per_diem_clevel_local": 1200, "per_diem_other_intl": 1350, "per_diem_other_local": 900},
+    "grievance": {"categories": ["harassment", "discrimination", "safety", "policy", "compensation", "other"], "severity_levels": ["low", "medium", "high", "critical"], "sla_hours": {"low": 168, "medium": 72, "high": 24, "critical": 4}},
+}
+
+
+def _seed_policies(c):
+    """Seed default policies into the policies table."""
+    import json as _json
+    for category, config in DEFAULT_POLICIES.items():
+        c.execute(
+            "INSERT INTO policies (category, config) VALUES (%s, %s) ON CONFLICT (category) DO NOTHING",
+            (category, _json.dumps(config))
+        )
+
+
+# ── Policy cache (refreshed per request cycle) ─────────
+
+_policy_cache = {}
+_policy_cache_ts = 0
+
+
+def _load_policies():
+    """Load all policies into cache (refreshes every 60s)."""
+    import time as _time
+    global _policy_cache, _policy_cache_ts
+    now = _time.time()
+    if _policy_cache and (now - _policy_cache_ts) < 60:
+        return _policy_cache
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT category, config FROM policies")
+        rows = _fetchall(c)
+        conn.close()
+        _policy_cache = {r["category"]: r["config"] for r in rows}
+        _policy_cache_ts = now
+    except Exception:
+        pass
+    return _policy_cache
+
+
+def get_policy(key: str, default=None):
+    """Get a policy value by dot-notation key (e.g. 'loan.max_emi_percent').
+    Falls back to DEFAULT_POLICIES then default."""
+    parts = key.split(".", 1)
+    category = parts[0]
+    field = parts[1] if len(parts) > 1 else None
+    policies = _load_policies()
+    config = policies.get(category) or DEFAULT_POLICIES.get(category) or {}
+    if field is None:
+        return config or default
+    # Handle nested keys like travel.per_diem.chairman.international -> per_diem_chairman_intl
+    return config.get(field, default)
+
+
+def set_policy(category: str, config: dict):
+    """Set/merge a policy config for a category. Returns updated config."""
+    import json as _json
+    global _policy_cache_ts
+    conn = get_db()
+    c = conn.cursor()
+    # Merge: existing config || new values
+    c.execute("SELECT config FROM policies WHERE category = %s", (category,))
+    existing = _fetchone(c)
+    if existing:
+        merged = existing["config"]
+        merged.update(config)
+        c.execute("UPDATE policies SET config = %s, updated_at = NOW() WHERE category = %s",
+                  (_json.dumps(merged), category))
+    else:
+        c.execute("INSERT INTO policies (category, config) VALUES (%s, %s)",
+                  (category, _json.dumps(config)))
+    conn.commit()
+    conn.close()
+    _policy_cache_ts = 0  # Invalidate cache
+    return {"ok": True, "category": category, "config": config}
+
+
+
+def get_all_policies():
+    """Get all policies as a dict of category -> {config, updated_at}."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT category, config, updated_at, updated_by FROM policies ORDER BY category")
+    rows = _fetchall(c)
+    conn.close()
+    return {r["category"]: {"config": r["config"], "updated_at": r["updated_at"], "updated_by": r["updated_by"]} for r in rows}
+
 
 
 # ── Query Functions ─────────────────────────────────────
@@ -476,16 +590,18 @@ def check_loan_eligibility(emp_id):
         return {"eligible": False, "reason": "Employee not found"}
     join = date.fromisoformat(emp["join_date"])
     years = (date.today() - join).days / 365.25
-    if years < 1:
-        return {"eligible": False, "reason": "Min 1 year service required"}
+    min_years = get_policy("loan.min_service_years", 1)
+    if years < min_years:
+        return {"eligible": False, "reason": f"Min {min_years} year service required"}
     loans = get_employee_loans(emp_id)
     basic = emp["salary"]["basic"]
     existing_emi = sum(l.get("monthly_installment", 0) or 0 for l in loans)
-    max_emi = basic * 0.33
+    max_emi = basic * (get_policy("loan.max_emi_percent", 33) / 100)
     available = max_emi - existing_emi
     if available <= 0:
         return {"eligible": False, "reason": f"EMI cap reached ({existing_emi:,.0f}/{max_emi:,.0f} SAR)"}
-    return {"eligible": True, "max_amount": int(min(basic * 2, available * 12)), "max_emi": int(available), "service_years": round(years, 1)}
+    multiplier = get_policy("loan.max_amount_multiplier", 2)
+    return {"eligible": True, "max_amount": int(min(basic * multiplier, available * 12)), "max_emi": int(available), "service_years": round(years, 1)}
 
 
 def create_loan(emp_id, loan_type, amount, months):
@@ -506,12 +622,13 @@ def create_loan(emp_id, loan_type, amount, months):
 
 # ── Travel CRUD ─────────────────────────────────────────
 
-PER_DIEM = {"chairman": {"intl": 3500, "local": 2000}, "c_level": {"intl": 1750, "local": 1200}, "other": {"intl": 1350, "local": 900}}
+# Per diem rates now loaded from policies DB
 
 def get_per_diem(grade, international=False):
     g = int(grade) if grade and grade.isdigit() else 34
     tier = "chairman" if g >= 40 else "c_level" if g >= 38 else "other"
-    return PER_DIEM[tier]["intl" if international else "local"]
+    region = "intl" if international else "local"
+    return get_policy(f"travel.per_diem_{tier}_{region}", 900)
 
 
 def create_travel_request(emp_id, destination, start_date, end_date, days, travel_type="business"):
@@ -555,19 +672,40 @@ def get_announcements(limit=5):
 # ── Team Attendance ─────────────────────────────────────
 
 def get_team_attendance(manager_id):
-    import random
+    """Get real attendance data for manager's team (today)."""
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT id, name FROM employees WHERE manager_id = %s", (manager_id,))
+    today = str(date.today())
+    c.execute("""
+        SELECT e.id, e.name, a.clock_in, a.clock_out, a.status, a.location
+        FROM employees e
+        LEFT JOIN attendance_records a ON e.id = a.employee_id AND a.date = %s
+        WHERE e.manager_id = %s
+        ORDER BY e.name
+    """, (today, manager_id))
     rows = _fetchall(c)
+    c.execute("""
+        SELECT employee_id FROM leave_requests
+        WHERE approver_id = %s AND status = 'approved'
+        AND start_date <= %s AND end_date >= %s
+    """, (manager_id, today, today))
+    on_leave_ids = {r["employee_id"] for r in _fetchall(c)}
     conn.close()
-    statuses = ["present", "present", "present", "remote", "late", "absent", "on_leave"]
     result = []
     for r in rows:
-        status = random.choice(statuses)
-        ci = f"0{random.randint(7,9)}:{random.randint(0,59):02d}" if status in ("present","late","remote") else None
-        co = f"{random.randint(16,18)}:{random.randint(0,59):02d}" if status == "present" else None
-        result.append({"name": r["name"], "status": status, "checkIn": ci, "checkOut": co})
+        if r["id"] in on_leave_ids:
+            status = "on_leave"
+        elif r.get("clock_in"):
+            status = r.get("status", "present")
+        else:
+            status = "absent"
+        result.append({
+            "name": r["name"],
+            "status": status,
+            "checkIn": r.get("clock_in"),
+            "checkOut": r.get("clock_out"),
+            "location": r.get("location"),
+        })
     return result
 
 
@@ -641,7 +779,9 @@ def clock_in(emp_id, location="office"):
         conn.close()
         return {"error": f"Already clocked in at {existing['clock_in']}", "record": existing}
     hour, minute = map(int, now.split(":"))
-    status = "late" if (hour > 8 or (hour == 8 and minute > 30)) else "present"
+    _late = get_policy("attendance.late_threshold", "08:30")
+    _late_h, _late_m = map(int, _late.split(":"))
+    status = "late" if (hour > _late_h or (hour == _late_h and minute > _late_m)) else "present"
     if existing:
         c.execute("UPDATE attendance_records SET clock_in = %s, status = %s, location = %s WHERE employee_id = %s AND date = %s", (now, status, location, emp_id, today))
     else:
@@ -669,7 +809,8 @@ def clock_out(emp_id):
     ci_h, ci_m = map(int, existing["clock_in"].split(":"))
     co_h, co_m = map(int, now.split(":"))
     hours = round((co_h * 60 + co_m - ci_h * 60 - ci_m) / 60, 2)
-    overtime = max(0, round(hours - 8, 2))
+    _std_hours = get_policy("attendance.standard_hours", 8)
+    overtime = max(0, round(hours - _std_hours, 2))
     c.execute("UPDATE attendance_records SET clock_out = %s, hours_worked = %s, overtime_hours = %s WHERE employee_id = %s AND date = %s", (now, hours, overtime, emp_id, today))
     conn.commit()
     c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
