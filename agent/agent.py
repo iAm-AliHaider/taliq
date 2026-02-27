@@ -1233,62 +1233,65 @@ async def show_notifications(context: RunContext):
 @function_tool
 async def approve_loan_request(
     context: RunContext,
-    reference: str = "",
+    employee_name: str = "",
     decision: str = "approved",
 ):
-    """Approve or reject a pending loan request. decision: 'approved' or 'rejected'. Gets the ref from pending list."""
+    """Approve or reject a pending loan. Say the employee name (e.g. 'approve Sara loan')."""
     emp_id = get_current_employee_id_from_context()
     if not db.is_manager(emp_id):
         return "You don't have manager access."
     
-    if not reference:
-        # Show pending loans
-        pending = db.get_pending_loan_requests(emp_id)
-        if not pending:
-            return "No pending loan requests."
-        items = []
-        for p in pending:
-            items.append(f"{p['ref']}: {p['employee_name']} - {p['loan_type']} for {p['amount']:,.0f} SAR ({p['installments_left']} months)")
-        return f"Pending loan requests:\n" + "\n".join(items) + "\nSay which one to approve or reject."
+    pending = db.get_pending_loan_requests(emp_id)
+    if not pending:
+        return "No pending loan requests."
     
-    result = db.approve_loan(reference, decision)
-    if result:
-        await _send_ui("StatusBanner", {
-            "message": f"Loan {reference} {decision}: {result['employee_name']} - {result['amount']:,.0f} SAR",
-            "type": "success" if decision == "approved" else "warning",
-        }, f"loan_approval_{reference}")
-        return f"Loan {reference} has been {decision}."
-    return f"Loan {reference} not found or already processed."
+    if employee_name:
+        name_lower = employee_name.lower()
+        matched = [p for p in pending if name_lower in p["employee_name"].lower()]
+        if len(matched) == 1:
+            result = db.approve_loan(matched[0]["ref"], decision)
+            if result:
+                await _send_ui("StatusBanner", {
+                    "message": f"Loan {decision}: {result['employee_name']} - {result['amount']:,.0f} SAR",
+                    "type": "success" if decision == "approved" else "warning",
+                }, f"loan_approval_{matched[0]['ref']}")
+                return f"{result['employee_name']}'s loan has been {decision}."
+        elif len(matched) > 1:
+            return "Multiple matches. " + ", ".join(f"{p['employee_name']} ({p['loan_type']} {p['amount']:,.0f} SAR)" for p in matched)
+    
+    items = [f"- {p['employee_name']}: {p['loan_type']} {p['amount']:,.0f} SAR ({p['installments_left']} months)" for p in pending]
+    return f"{len(pending)} pending loans:\n" + "\n".join(items)
 
 
 @function_tool
 async def approve_travel_request(
     context: RunContext,
-    reference: str = "",
+    employee_name: str = "",
     decision: str = "approved",
 ):
-    """Approve or reject a travel request."""
+    """Approve or reject a travel request. Say the employee name."""
     emp_id = get_current_employee_id_from_context()
     if not db.is_manager(emp_id):
         return "You don't have manager access."
     
-    if not reference:
-        pending = db.get_pending_travel_requests(emp_id)
-        if not pending:
-            return "No pending travel requests."
-        items = []
-        for p in pending:
-            items.append(f"{p['ref']}: {p['employee_name']} to {p['destination']} ({p['days']} days, {p['total_allowance']:,.0f} SAR)")
-        return f"Pending travel requests:\n" + "\n".join(items)
+    pending = db.get_pending_travel_requests(emp_id)
+    if not pending:
+        return "No pending travel requests."
     
-    result = db.approve_travel(reference, decision)
-    if result:
-        await _send_ui("StatusBanner", {
-            "message": f"Travel {reference} {decision}: {result['employee_name']} to {result['destination']}",
-            "type": "success" if decision == "approved" else "warning",
-        }, f"travel_approval_{reference}")
-        return f"Travel request {reference} has been {decision}."
-    return f"Travel request {reference} not found."
+    if employee_name:
+        name_lower = employee_name.lower()
+        matched = [p for p in pending if name_lower in p["employee_name"].lower()]
+        if len(matched) == 1:
+            result = db.approve_travel(matched[0]["ref"], decision)
+            if result:
+                await _send_ui("StatusBanner", {
+                    "message": f"Travel {decision}: {result['employee_name']} to {result['destination']}",
+                    "type": "success" if decision == "approved" else "warning",
+                }, f"travel_approval_{matched[0]['ref']}")
+                return f"{result['employee_name']}'s travel request has been {decision}."
+    
+    items = [f"- {p['employee_name']} to {p['destination']} ({p['days']} days)" for p in pending]
+    return f"{len(pending)} pending travel requests:\n" + "\n".join(items)
 
 
 @function_tool
@@ -1324,31 +1327,32 @@ async def approve_overtime_request(
 @function_tool
 async def approve_document_request(
     context: RunContext,
-    reference: str = "",
+    employee_name: str = "",
     decision: str = "ready",
 ):
-    """Approve a document request. decision: 'ready' (approved) or 'rejected'."""
+    """Approve a document request. Say the employee name. Decision: 'ready' or 'rejected'."""
     emp_id = get_current_employee_id_from_context()
     if not db.is_manager(emp_id):
         return "You don't have manager access."
     
-    if not reference:
-        pending = db.get_pending_document_requests(emp_id)
-        if not pending:
-            return "No pending document requests."
-        items = []
-        for p in pending:
-            items.append(f"{p['ref']}: {p['employee_name']} - {p['document_type']} (status: {p['status']})")
-        return f"Pending document requests:\n" + "\n".join(items)
+    pending = db.get_pending_document_requests(emp_id)
+    if not pending:
+        return "No pending document requests."
     
-    result = db.approve_document(reference, decision)
-    if result:
-        await _send_ui("StatusBanner", {
-            "message": f"Document {reference} {decision}: {result['employee_name']} - {result['document_type']}",
-            "type": "success",
-        }, f"doc_approval_{reference}")
-        return f"Document request {reference} marked as {decision}."
-    return f"Document request {reference} not found."
+    if employee_name:
+        name_lower = employee_name.lower()
+        matched = [p for p in pending if name_lower in p["employee_name"].lower()]
+        if len(matched) == 1:
+            result = db.approve_document(matched[0]["ref"], decision)
+            if result:
+                await _send_ui("StatusBanner", {
+                    "message": f"Document {decision}: {result['employee_name']} - {result['document_type']}",
+                    "type": "success",
+                }, f"doc_approval_{matched[0]['ref']}")
+                return f"{result['employee_name']}'s document request marked as {decision}."
+    
+    items = [f"- {p['employee_name']}: {p['document_type']} ({p['status']})" for p in pending]
+    return f"{len(pending)} pending documents:\n" + "\n".join(items)
 
 
 # ── Manager: Grievance Management ───────────────────────
@@ -1915,6 +1919,19 @@ async def entrypoint(ctx: JobContext):
     except Exception as e:
         logger.error(f"Dashboard auto-show error: {e}")
 
+
+# Start admin API in background thread
+import threading
+from admin_api import start_admin_api
+
+def _start_admin():
+    try:
+        start_admin_api(8082)
+    except Exception as e:
+        logger.error(f"Admin API failed: {e}")
+
+_admin_thread = threading.Thread(target=_start_admin, daemon=True)
+_admin_thread.start()
 
 if __name__ == "__main__":
     cli.run_app(
