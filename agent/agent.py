@@ -1307,7 +1307,7 @@ async def entrypoint(ctx: JobContext):
             activation_threshold=0.25,
             prefix_padding_duration=0.3,
         ),
-        stt=deepgram.STT(model="nova-3", language="en"),
+        stt=deepgram.STT(model="nova-3", language="ar" if lang == "ar" else "en"),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(
             model="speaches-ai/Kokoro-82M-v1.0-ONNX",
@@ -1329,8 +1329,30 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(room=ctx.room, agent=TaliqAgent())
     emp = db.get_employee(get_current_employee_id_from_context())
-    name = emp["name"].split()[0] if emp else "there"
-    greeting = f"أهلاً {name}! أنا تليق، مساعدك الصوتي. كيف أقدر أساعدك؟" if lang == "ar" else f"Ahlan {name}! I'm Taliq. How can I help?"
+    if emp:
+        name = emp["name"].split()[0]
+        full_name = emp["name"]
+        position = emp["position"]
+        dept = emp["department"]
+        is_mgr = db.is_manager(employee_id)
+        role_label = " (Manager)" if is_mgr else ""
+        logger.info(f"Session: {full_name} [{employee_id}] - {position}, {dept}{role_label} - Lang: {lang}")
+        
+        # Send identity banner first
+        await _send_ui("StatusBanner", {
+            "message": f"Logged in as {full_name} - {position}, {dept}{role_label}",
+            "type": "info",
+        }, "session_info")
+        
+        if lang == "ar":
+            greeting = f"أهلاً {name}! أنا تليق. مرحباً بك في قسم {dept}. كيف أقدر أساعدك؟"
+        else:
+            greeting = f"Ahlan {name}! I\'m Taliq, your HR assistant. You\'re logged in as {full_name}, {position} in {dept}. How can I help you today?"
+    else:
+        name = "there"
+        logger.warning(f"Employee {employee_id} not found in database")
+        greeting = "Hello! I couldn\'t find your profile. Please log out and try again."
+    
     await session.say(greeting, allow_interruptions=True)
     
     # Auto-show dashboard on connect

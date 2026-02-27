@@ -34,7 +34,7 @@ export default function Home() {
   const [token, setToken] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
-  const [roomName] = useState(() => `taliq-${Date.now()}`);
+  
   const [authChecked, setAuthChecked] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
 
@@ -60,8 +60,9 @@ export default function Home() {
       setIsLoading(true);
       setError("");
       try {
+        const freshRoom = `taliq-${Date.now()}`;
         const identity = `${employee!.id}-${Date.now()}`;
-        const resp = await fetchToken(roomName, identity, employee!.id, lang);
+        const resp = await fetchToken(freshRoom, identity, employee!.id, lang);
         setToken(resp.token);
       } catch {
         setError("Failed to connect to Taliq");
@@ -70,7 +71,7 @@ export default function Home() {
       }
     }
     getToken();
-  }, [employee, roomName]);
+  }, [employee, lang]);
 
   const handleLogin = (emp: AuthEmployee) => {
     localStorage.setItem("taliq_employee", JSON.stringify(emp));
