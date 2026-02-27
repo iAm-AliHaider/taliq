@@ -22,6 +22,8 @@ import { ManagerDashboard } from "./taliq/ManagerDashboard";
 import { TeamOverviewCard } from "./taliq/TeamOverviewCard";
 import { ClockInCard } from "./taliq/ClockInCard";
 import { MyAttendanceCard } from "./taliq/MyAttendanceCard";
+import { QuickDashboard } from "./taliq/QuickDashboard";
+import { LeaveHistoryCard } from "./taliq/LeaveHistoryCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -44,6 +46,8 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   TeamOverviewCard,
   ClockInCard,
   MyAttendanceCard,
+  QuickDashboard,
+  LeaveHistoryCard,
 };
 
 interface Props {

@@ -53,6 +53,9 @@ Employee: {employee_name} ({employee_id}) | Dept: {department} | Grade: {grade}
 You have real database access. Keep voice responses SHORT (1-2 sentences max).
 Use Marhaba/Ahlan greetings. Currency: SAR. GOSI: 9.75% of basic.
 
+DASHBOARD:
+When conversation starts or user says 'home'/'dashboard', call show_dashboard first.
+
 SELF-SERVICE FORMS:
 When user wants to CREATE something, show the interactive FORM (not just a preview):
 - "Apply for leave" -> show_leave_form (interactive form with dropdowns & date pickers)
@@ -710,6 +713,66 @@ async def show_leave_calendar(context: RunContext):
     return f"Showing {len(leaves)} approved leaves."
 
 
+@function_tool()
+async def show_dashboard(context: RunContext):
+    """Show the employee's personal dashboard with stats, quick actions, and overview. Call at start of conversation or when user asks for dashboard/home."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Employee not found."
+    is_mgr = db.is_manager(emp_id)
+    loans = db.get_employee_loans(emp_id)
+    docs = db.get_document_requests(emp_id)
+    pending_docs = [d for d in docs if d["status"] in ("requested", "processing")]
+    today_att = db.get_today_attendance(emp_id)
+    anns = db.get_announcements(3)
+    
+    props = {
+        "employeeName": emp["name"],
+        "employeeId": emp["id"],
+        "position": emp["position"],
+        "department": emp["department"],
+        "isManager": is_mgr,
+        "leaveBalance": emp["leave_balance"],
+        "activeLoans": len(loans),
+        "pendingRequests": len(pending_docs),
+        "announcements": len(anns),
+        "todayAttendance": dict(today_att) if today_att else None,
+    }
+    
+    if is_mgr:
+        approvals = db.get_pending_approvals(emp_id)
+        reports = db.get_direct_reports(emp_id)
+        props["pendingApprovals"] = len(approvals)
+        props["teamSize"] = len(reports)
+    
+    await _send_ui("QuickDashboard", props, "main_card")
+    parts = [f"Dashboard for {emp['name']}."]
+    if today_att and today_att.get("clock_in"):
+        parts.append(f"Clocked in at {today_att['clock_in']}.")
+    else:
+        parts.append("Not clocked in yet.")
+    parts.append(f"{emp['leave_balance']['annual']} annual leave days.")
+    if is_mgr:
+        parts.append(f"{props.get('pendingApprovals', 0)} pending approvals.")
+    return " ".join(parts)
+
+
+@function_tool()
+async def show_leave_history(context: RunContext):
+    """Show all leave requests with history. Call when user asks to see leave history or all leave requests."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Not found."
+    reqs = db.get_leave_requests(emp_id)
+    await _send_ui("LeaveHistoryCard", {
+        "employeeName": emp["name"],
+        "requests": reqs,
+    }, "main_card")
+    return f"{len(reqs)} leave request(s)."
+
+
 # ---- ATTENDANCE TOOLS ----
 
 
@@ -797,7 +860,7 @@ async def request_overtime_approval(context: RunContext, hours: float, reason: s
 
 
 @function_tool()
-async def start_new_interview(context: RunContext, candidate_name: str, position: str, stage: str = "hr_screening"):
+async def start_new_interview(context: RunContext, candidate_name: str, position: str = "General", stage: str = "hr_screening"):
     """Start a new AI-powered interview. Stage can be: hr_screening, technical, behavioral, leadership."""
     emp_id = get_current_employee_id_from_context()
     # Check if already has active interview
@@ -926,6 +989,9 @@ def candidate_rating(score: float) -> str:
 # ---- AGENT TOOLS LIST ----
 
 ALL_TOOLS = [
+    # Dashboard
+    show_dashboard,
+    show_leave_history,
     # Interactive forms
     show_leave_form,
     show_document_form,
@@ -1088,6 +1154,33 @@ async def entrypoint(ctx: JobContext):
     await session.say(
         f"Ahlan {name}! I'm Taliq. How can I help?", allow_interruptions=True
     )
+    
+    # Auto-show dashboard on connect
+    try:
+        emp = db.get_employee(employee_id)
+        if emp:
+            is_mgr = db.is_manager(employee_id)
+            loans = db.get_employee_loans(employee_id)
+            docs = db.get_document_requests(employee_id)
+            pending_docs = [d for d in docs if d["status"] in ("requested", "processing")]
+            today_att = db.get_today_attendance(employee_id)
+            anns = db.get_announcements(3)
+            props = {
+                "employeeName": emp["name"], "employeeId": emp["id"],
+                "position": emp["position"], "department": emp["department"],
+                "isManager": is_mgr, "leaveBalance": emp["leave_balance"],
+                "activeLoans": len(loans), "pendingRequests": len(pending_docs),
+                "announcements": len(anns),
+                "todayAttendance": dict(today_att) if today_att else None,
+            }
+            if is_mgr:
+                approvals = db.get_pending_approvals(employee_id)
+                reports = db.get_direct_reports(employee_id)
+                props["pendingApprovals"] = len(approvals)
+                props["teamSize"] = len(reports)
+            await _send_ui("QuickDashboard", props, "main_card")
+    except Exception as e:
+        logger.error(f"Dashboard auto-show error: {e}")
 
 
 if __name__ == "__main__":
