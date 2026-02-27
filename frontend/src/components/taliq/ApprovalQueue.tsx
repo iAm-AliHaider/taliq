@@ -11,62 +11,53 @@ interface ApprovalItem {
   status: string;
 }
 
-interface ApprovalQueueProps {
+interface Props {
   items: ApprovalItem[];
 }
 
-const TYPE_ICONS: Record<string, string> = {
-  annual: "🏖️",
-  sick: "🏥",
-  emergency: "🚨",
-};
-
-export function ApprovalQueue({ items }: ApprovalQueueProps) {
+export function ApprovalQueue({ items }: Props) {
   return (
-    <div className="p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-white">Pending Approvals</h3>
-        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full font-medium">
-          {items.length} pending
-        </span>
+    <div className="card overflow-hidden">
+      <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-800">Pending Approvals</h3>
+        <span className="badge badge-gold">{items.length} pending</span>
       </div>
 
-      {items.length === 0 ? (
-        <div className="text-center py-6">
-          <span className="text-2xl">✅</span>
-          <p className="text-xs text-zinc-500 mt-2">All caught up!</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">{TYPE_ICONS[item.type] || "📋"}</span>
-                  <span className="text-sm text-white font-medium">{item.employeeName}</span>
-                </div>
-                <span className="text-[10px] text-zinc-500">{item.id}</span>
+      <div className="divide-y divide-gray-100">
+        {items.length === 0 ? (
+          <div className="p-8 text-center">
+            <span className="text-2xl mb-2 block">✅</span>
+            <p className="text-sm text-gray-400">All caught up!</p>
+          </div>
+        ) : items.map((item) => (
+          <div key={item.id} className="p-4 hover:bg-gray-50/50 transition-colors">
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{item.employeeName}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {item.type} • {item.days} days • {item.startDate} → {item.endDate}
+                </p>
               </div>
-              <div className="flex items-center gap-3 text-xs text-zinc-400 mb-3">
-                <span>{item.type} leave</span>
-                <span>·</span>
-                <span>{item.days} days</span>
-                <span>·</span>
-                <span>{item.startDate} → {item.endDate}</span>
-              </div>
-              <p className="text-xs text-zinc-500 mb-3">{item.reason}</p>
-              <div className="flex gap-2">
-                <button className="flex-1 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition">
+              <span className={`badge ${item.status === "pending" ? "badge-gold" : item.status === "approved" ? "badge-emerald" : "badge-red"}`}>
+                {item.status}
+              </span>
+            </div>
+            {item.reason && (
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 mt-2">{item.reason}</p>
+            )}
+            {item.status === "pending" && (
+              <div className="flex gap-2 mt-3">
+                <button className="flex-1 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 transition-colors">
                   Approve
                 </button>
-                <button className="flex-1 py-2 rounded-xl bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 transition">
+                <button className="flex-1 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors">
                   Reject
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

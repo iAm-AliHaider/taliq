@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-interface PaySlipCardProps {
+interface Props {
   employeeName: string;
   month: string;
   basic: number;
@@ -11,76 +9,65 @@ interface PaySlipCardProps {
   deductions: number;
   netPay: number;
   currency: string;
+  otherAllowances?: number;
+  gosiDeduction?: number;
 }
 
-export function PaySlipCard({ employeeName, month, basic, housing, transport, deductions, netPay, currency }: PaySlipCardProps) {
-  const gross = basic + housing + transport;
-  const [animatedNet, setAnimatedNet] = useState(0);
-
-  useEffect(() => {
-    let frame = 0;
-    const duration = 50;
-    const step = () => {
-      frame++;
-      setAnimatedNet(Math.round((frame / duration) * netPay));
-      if (frame < duration) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [netPay]);
+export function PaySlipCard({ employeeName, month, basic, housing, transport, deductions, netPay, currency, otherAllowances, gosiDeduction }: Props) {
+  const fmt = (n: number) => n.toLocaleString();
+  const totalEarnings = basic + housing + transport + (otherAllowances || 0);
 
   return (
-    <div className="p-5">
-      <div className="flex items-center justify-between mb-5">
+    <div className="card overflow-hidden">
+      <div className="px-5 py-3 bg-gradient-to-r from-emerald-50 to-amber-50 border-b border-emerald-100 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-white">Pay Slip</h3>
-          <p className="text-[10px] text-zinc-600 mt-0.5">{employeeName}</p>
+          <h3 className="text-sm font-semibold text-gray-800">Pay Slip</h3>
+          <p className="text-xs text-gray-400">{month}</p>
         </div>
-        <div className="px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06]">
-          <span className="text-[10px] text-zinc-400">{month}</span>
-        </div>
+        <span className="badge badge-emerald">{employeeName}</span>
       </div>
 
-      {/* Earnings */}
-      <div className="mb-4">
-        <p className="text-[9px] text-zinc-600 uppercase tracking-[0.15em] mb-3">Earnings</p>
-        <div className="space-y-2">
-          <SlipRow label="Basic Salary" amount={basic} currency={currency} />
-          <SlipRow label="Housing Allowance" amount={housing} currency={currency} />
-          <SlipRow label="Transport Allowance" amount={transport} currency={currency} />
+      <div className="p-5">
+        {/* Earnings */}
+        <div className="mb-4">
+          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Earnings</h4>
+          <div className="space-y-2">
+            <Row label="Basic Salary" amount={basic} currency={currency} />
+            <Row label="Housing Allowance" amount={housing} currency={currency} />
+            <Row label="Transportation" amount={transport} currency={currency} />
+            {otherAllowances ? <Row label="Other Allowances" amount={otherAllowances} currency={currency} /> : null}
+            <div className="border-t border-gray-100 pt-2">
+              <Row label="Total Earnings" amount={totalEarnings} currency={currency} bold />
+            </div>
+          </div>
         </div>
-        <div className="flex justify-between mt-3 pt-3 border-t border-white/[0.04]">
-          <span className="text-[11px] text-zinc-400">Gross</span>
-          <span className="text-[11px] text-white font-semibold">{gross.toLocaleString()} {currency}</span>
+
+        {/* Deductions */}
+        <div className="mb-4">
+          <h4 className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-2">Deductions</h4>
+          <div className="space-y-2">
+            {gosiDeduction ? <Row label="GOSI (9.75%)" amount={-gosiDeduction} currency={currency} negative /> : null}
+            <Row label="Total Deductions" amount={-deductions} currency={currency} negative />
+          </div>
         </div>
-      </div>
 
-      {/* Deductions */}
-      <div className="mb-5">
-        <p className="text-[9px] text-zinc-600 uppercase tracking-[0.15em] mb-3">Deductions</p>
-        <SlipRow label="GOSI (9.75%)" amount={deductions} currency={currency} isDeduction />
-      </div>
-
-      {/* Net Pay - Hero number */}
-      <div className="relative px-5 py-4 rounded-2xl overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-amber-500/10" />
-        <div className="absolute inset-0 border border-emerald-500/10 rounded-2xl" />
-        <div className="relative flex justify-between items-center">
-          <span className="text-xs text-zinc-400">Net Pay</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-amber-400 bg-clip-text text-transparent">
-            {animatedNet.toLocaleString()} {currency}
-          </span>
+        {/* Net Pay */}
+        <div className="bg-emerald-50 rounded-xl p-4 flex items-center justify-between">
+          <span className="text-sm font-bold text-gray-800">Net Pay</span>
+          <span className="text-xl font-bold text-emerald-600">{fmt(netPay)} <span className="text-xs font-normal text-gray-400">{currency}</span></span>
         </div>
       </div>
     </div>
   );
 }
 
-function SlipRow({ label, amount, currency, isDeduction }: { label: string; amount: number; currency: string; isDeduction?: boolean }) {
+function Row({ label, amount, currency, bold, negative }: { label: string; amount: number; currency: string; bold?: boolean; negative?: boolean }) {
+  const fmt = (n: number) => Math.abs(n).toLocaleString();
   return (
-    <div className="flex justify-between items-center group">
-      <span className="text-[11px] text-zinc-500 group-hover:text-zinc-300 transition">{label}</span>
-      <span className={`text-[11px] font-medium ${isDeduction ? "text-red-400/80" : "text-zinc-300"}`}>
-        {isDeduction ? "-" : ""}{Math.abs(amount).toLocaleString()} {currency}
+    <div className="flex items-center justify-between">
+      <span className={`text-xs ${bold ? "font-semibold text-gray-800" : "text-gray-500"}`}>{label}</span>
+      <span className={`text-xs ${bold ? "font-bold text-gray-900" : negative ? "text-red-600 font-medium" : "font-medium text-gray-700"}`}>
+        {negative ? "-" : ""}{fmt(amount)} {currency}
       </span>
     </div>
   );

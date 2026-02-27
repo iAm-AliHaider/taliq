@@ -1,6 +1,6 @@
 "use client";
 
-interface LeaveRequestFormProps {
+interface Props {
   employeeName: string;
   leaveType: string;
   startDate: string;
@@ -11,66 +11,53 @@ interface LeaveRequestFormProps {
   status: "preview" | "submitted" | "approved" | "rejected";
 }
 
-const TYPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  annual: { label: "Annual Leave", icon: "🏖️", color: "text-emerald-400" },
-  sick: { label: "Sick Leave", icon: "🏥", color: "text-amber-400" },
-  emergency: { label: "Emergency Leave", icon: "🚨", color: "text-red-400" },
-};
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  preview: { bg: "bg-blue-500/10", text: "text-blue-400", label: "Preview" },
-  submitted: { bg: "bg-emerald-500/10", text: "text-emerald-400", label: "Submitted ✓" },
-  approved: { bg: "bg-emerald-500/10", text: "text-emerald-400", label: "Approved" },
-  rejected: { bg: "bg-red-500/10", text: "text-red-400", label: "Rejected" },
-};
-
-export function LeaveRequestForm({ employeeName, leaveType, startDate, endDate, days, reason, balance, status }: LeaveRequestFormProps) {
-  const typeInfo = TYPE_LABELS[leaveType] || TYPE_LABELS.annual;
-  const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.preview;
+export function LeaveRequestForm({ employeeName, leaveType, startDate, endDate, days, reason, balance, status }: Props) {
+  const statusConfig = {
+    preview: { badge: "badge-blue", label: "Preview", icon: "👁️" },
+    submitted: { badge: "badge-gold", label: "Submitted", icon: "📨" },
+    approved: { badge: "badge-emerald", label: "Approved", icon: "✅" },
+    rejected: { badge: "badge-red", label: "Rejected", icon: "❌" },
+  };
+  const s = statusConfig[status];
 
   return (
-    <div className="p-5">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{typeInfo.icon}</span>
-          <h3 className={`font-semibold text-sm ${typeInfo.color}`}>{typeInfo.label}</h3>
-        </div>
-        <span className={`text-[10px] px-2.5 py-1 rounded-full ${statusStyle.bg} ${statusStyle.text} font-medium`}>
-          {statusStyle.label}
-        </span>
+    <div className="card overflow-hidden">
+      {/* Status bar */}
+      <div className={`px-5 py-2 flex items-center justify-between ${
+        status === "approved" ? "bg-emerald-50 border-b border-emerald-100" :
+        status === "rejected" ? "bg-red-50 border-b border-red-100" :
+        status === "submitted" ? "bg-amber-50 border-b border-amber-100" :
+        "bg-blue-50 border-b border-blue-100"
+      }`}>
+        <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">{s.icon} Leave Request</span>
+        <span className={`badge ${s.badge}`}>{s.label}</span>
       </div>
 
-      {/* Form Fields */}
-      <div className="space-y-3 mb-4">
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-xs text-zinc-500">Employee</span>
-          <span className="text-sm text-white font-medium">{employeeName}</span>
+      <div className="p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Employee" value={employeeName} />
+          <Field label="Type" value={leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} />
+          <Field label="From" value={startDate} />
+          <Field label="To" value={endDate} />
+          <Field label="Days" value={String(days)} />
+          <Field label="Balance After" value={`${balance} days`} />
         </div>
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-xs text-zinc-500">From</span>
-          <span className="text-sm text-white">{startDate}</span>
-        </div>
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-xs text-zinc-500">To</span>
-          <span className="text-sm text-white">{endDate}</span>
-        </div>
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-xs text-zinc-500">Days</span>
-          <span className="text-sm text-white font-bold">{days}</span>
-        </div>
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-xs text-zinc-500">Reason</span>
-          <span className="text-sm text-zinc-300 text-right max-w-[60%]">{reason}</span>
-        </div>
+        {reason && (
+          <div>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Reason</span>
+            <p className="text-sm text-gray-700 mt-1 bg-gray-50 rounded-lg p-3">{reason}</p>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
 
-      {/* Balance Indicator */}
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-        <div className="w-2 h-2 rounded-full bg-emerald-400" />
-        <span className="text-xs text-zinc-400">Remaining balance:</span>
-        <span className="text-xs text-emerald-400 font-bold ml-auto">{balance} days</span>
-      </div>
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{label}</span>
+      <p className="text-sm font-medium text-gray-800 mt-0.5">{value}</p>
     </div>
   );
 }
