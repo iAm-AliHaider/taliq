@@ -13,6 +13,7 @@ interface AuthEmployee {
   position: string;
   department: string;
   isManager: boolean;
+  isAdmin?: boolean;
 }
 
 function AuroraBackground() {
@@ -156,6 +157,13 @@ export default function Home() {
               <span className="px-2 py-1 rounded-lg bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
                 Manager
               </span>
+            )}
+
+            {/* Admin link */}
+            {employee.isAdmin && (
+              <a href="/admin" className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-100 transition-colors">
+                Admin Panel
+              </a>
             )}
 
             {/* Logout */}

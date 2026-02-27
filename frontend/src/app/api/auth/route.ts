@@ -11,6 +11,7 @@ const EMPLOYEES = [
 ];
 
 const MANAGERS = ["E002", "E003", "E005"];
+const ADMINS = ["E005"];
 
 export async function GET() {
   const employees = EMPLOYEES.map((e) => ({
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const isManager = MANAGERS.includes(employee.id);
+    const isAdmin = ADMINS.includes(employee.id);
 
     return NextResponse.json({
       id: employee.id,
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
       position: employee.position,
       department: employee.department,
       isManager,
+      isAdmin,
     });
   } catch {
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
