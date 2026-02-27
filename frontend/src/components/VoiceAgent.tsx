@@ -1,8 +1,8 @@
 "use client";
 
 import { useRoomContext, useConnectionState, useVoiceAssistant } from "@livekit/components-react";
-import { ConnectionState, DataPacket_Kind } from "livekit-client";
-import { useState, useEffect, useCallback } from "react";
+import { ConnectionState } from "livekit-client";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Props {
   onQuickAction?: (text: string) => void;
@@ -14,11 +14,19 @@ export function VoiceAgent({ onQuickAction }: Props) {
   const { state: agentState } = useVoiceAssistant();
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState<Array<{ role: "user" | "agent"; text: string; ts: number }>>([]);
+  const chatRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const isListening = agentState === "listening";
   const isSpeaking = agentState === "speaking";
   const isThinking = agentState === "thinking";
+
+  // Auto-scroll transcript on every change
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    }
+  }, [transcript]);
 
   // Listen for transcription events
   useEffect(() => {
@@ -29,7 +37,6 @@ export function VoiceAgent({ onQuickAction }: Props) {
         const isAgent = participant?.identity?.startsWith("agent") || participant?.identity === "taliq";
         setTranscript(prev => {
           const last = prev[prev.length - 1];
-          // Merge consecutive same-role messages
           if (last && last.role === (isAgent ? "agent" : "user") && Date.now() - last.ts < 3000) {
             return [...prev.slice(0, -1), { ...last, text: last.text + " " + seg.text.trim(), ts: Date.now() }];
           }
@@ -41,7 +48,6 @@ export function VoiceAgent({ onQuickAction }: Props) {
     return () => { room.off("transcriptionReceived", handleTranscription); };
   }, [room]);
 
-  // Send text as simulated user speech via data channel
   const sendTextToAgent = useCallback(async (text: string) => {
     if (!room?.localParticipant) return;
     try {
@@ -91,11 +97,11 @@ export function VoiceAgent({ onQuickAction }: Props) {
         )}
       </div>
 
-      {/* Live Transcript */}
+      {/* Live Transcript — auto-scrolls */}
       {transcript.length > 0 && (
-        <div className="w-full max-w-xs max-h-32 overflow-y-auto px-3 space-y-1.5 scrollbar-hide">
-          {transcript.slice(-4).map((t, i) => (
-            <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
+        <div ref={chatRef} className="w-full max-w-xs max-h-40 overflow-y-auto px-3 space-y-1.5 scroll-smooth">
+          {transcript.slice(-8).map((t, i) => (
+            <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"} animate-slide-up`}>
               <div className={`px-3 py-1.5 rounded-2xl text-xs max-w-[85%] ${
                 t.role === "user"
                   ? "bg-emerald-500 text-white rounded-br-sm"
