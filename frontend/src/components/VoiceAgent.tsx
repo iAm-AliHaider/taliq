@@ -1,12 +1,70 @@
 "use client";
 
 import { useRoomContext, useConnectionState, useVoiceAssistant } from "@livekit/components-react";
-import { ConnectionState } from "livekit-client";
+import { ConnectionState, Track } from "livekit-client";
 import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Props {
   onQuickAction?: (text: string) => void;
 }
+
+// Simple SVG icons as components - no emoji needed
+function MicIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function SpeakerIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+    </svg>
+  );
+}
+
+function XIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function ChatIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+const QUICK_ACTIONS = [
+  { label: "Leave", color: "text-emerald-600 bg-emerald-50 border-emerald-100", letter: "L", prompt: "Show me my leave balance" },
+  { label: "Profile", color: "text-blue-600 bg-blue-50 border-blue-100", letter: "P", prompt: "Show my profile" },
+  { label: "Pay Slip", color: "text-amber-600 bg-amber-50 border-amber-100", letter: "$", prompt: "Show my pay slip" },
+  { label: "Team", color: "text-purple-600 bg-purple-50 border-purple-100", letter: "T", prompt: "Show team attendance" },
+  { label: "Loans", color: "text-indigo-600 bg-indigo-50 border-indigo-100", letter: "B", prompt: "Show my loan balance" },
+  { label: "Approvals", color: "text-teal-600 bg-teal-50 border-teal-100", letter: "A", prompt: "Show pending approvals" },
+  { label: "Docs", color: "text-orange-600 bg-orange-50 border-orange-100", letter: "D", prompt: "Show my documents" },
+  { label: "News", color: "text-pink-600 bg-pink-50 border-pink-100", letter: "N", prompt: "Show announcements" },
+  { label: "Travel", color: "text-sky-600 bg-sky-50 border-sky-100", letter: "F", prompt: "Calculate travel allowance for Dubai 3 days" },
+];
 
 export function VoiceAgent({ onQuickAction }: Props) {
   const room = useRoomContext();
@@ -14,33 +72,47 @@ export function VoiceAgent({ onQuickAction }: Props) {
   const { state: agentState } = useVoiceAssistant();
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState<Array<{ role: "user" | "agent"; text: string; ts: number }>>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const chatRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
-  const isListening = agentState === "listening";
+  const isListening = agentState === "listening" && !isMuted;
   const isSpeaking = agentState === "speaking";
   const isThinking = agentState === "thinking";
 
-  // Auto-scroll transcript on every change
+  // Mute mic on connect (push-to-talk default)
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    if (isConnected && room?.localParticipant) {
+      room.localParticipant.setMicrophoneEnabled(true).then(() => {
+        const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+        if (micPub?.track) {
+          micPub.mute();
+          setIsMuted(true);
+        }
+      });
     }
+  }, [isConnected, room]);
+
+  // Auto-scroll transcript
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [transcript]);
 
-  // Listen for transcription events
+  // Transcription events
   useEffect(() => {
     if (!room) return;
     const handleTranscription = (segments: any[], participant: any) => {
       for (const seg of segments) {
         if (!seg.final || !seg.text?.trim()) continue;
-        const isAgent = participant?.identity?.startsWith("agent") || participant?.identity === "taliq";
+        const isAgentSpeaker = participant?.identity?.startsWith("agent") || participant?.identity === "taliq";
+        const role: "user" | "agent" = isAgentSpeaker ? "agent" : "user";
         setTranscript(prev => {
           const last = prev[prev.length - 1];
-          if (last && last.role === (isAgent ? "agent" : "user") && Date.now() - last.ts < 3000) {
-            return [...prev.slice(0, -1), { ...last, text: last.text + " " + seg.text.trim(), ts: Date.now() }];
+          if (last && last.role === role && Date.now() - last.ts < 3000) {
+            return [...prev.slice(0, -1), { role: last.role, text: last.text + " " + seg.text.trim(), ts: Date.now() }];
           }
-          return [...prev, { role: isAgent ? "agent" : "user", text: seg.text.trim(), ts: Date.now() }];
+          return [...prev, { role, text: seg.text.trim(), ts: Date.now() }].slice(-20);
         });
       }
     };
@@ -48,17 +120,36 @@ export function VoiceAgent({ onQuickAction }: Props) {
     return () => { room.off("transcriptionReceived", handleTranscription); };
   }, [room]);
 
+  const startListening = useCallback(() => {
+    if (!room?.localParticipant) return;
+    const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    if (micPub) { micPub.unmute(); setIsMuted(false); }
+  }, [room]);
+
+  const stopListening = useCallback(() => {
+    if (!room?.localParticipant) return;
+    setTimeout(() => {
+      const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (micPub) { micPub.mute(); setIsMuted(true); }
+    }, 300);
+  }, [room]);
+
+  const toggleMic = useCallback(() => {
+    if (isMuted) startListening(); else stopListening();
+  }, [isMuted, startListening, stopListening]);
+
   const sendTextToAgent = useCallback(async (text: string) => {
     if (!room?.localParticipant) return;
     try {
       const payload = new TextEncoder().encode(JSON.stringify({ type: "user_text", text }));
       await room.localParticipant.publishData(payload, { topic: "lk-chat", reliable: true });
-      setTranscript(prev => [...prev, { role: "user", text, ts: Date.now() }]);
+      setTranscript(prev => [...prev, { role: "user" as const, text, ts: Date.now() }].slice(-20));
     } catch (e) {
       console.error("Failed to send text:", e);
     }
   }, [room]);
 
+  // Audio level animation
   useEffect(() => {
     if (!isSpeaking && !isListening) { setAudioLevel(0); return; }
     const interval = setInterval(() => {
@@ -67,82 +158,154 @@ export function VoiceAgent({ onQuickAction }: Props) {
     return () => clearInterval(interval);
   }, [isSpeaking, isListening]);
 
-  const ringScale = 1 + audioLevel * 0.3;
-  const statusText = !isConnected ? "Connecting..." : isThinking ? "Thinking..." : isSpeaking ? "Speaking" : isListening ? "Listening..." : "Ready";
-  const statusColor = isSpeaking ? "text-emerald-600" : isListening ? "text-amber-600" : isThinking ? "text-blue-600" : "text-gray-400";
+  const ringScale = 1 + audioLevel * 0.4;
+
+  const orbBg = isSpeaking
+    ? "bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/30"
+    : isListening
+    ? "bg-gradient-to-br from-red-400 to-red-500 shadow-red-500/30"
+    : isThinking
+    ? "bg-gradient-to-br from-blue-400 to-blue-500 shadow-blue-500/30"
+    : "bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20";
+
+  const statusText = !isConnected ? "Connecting..." : isSpeaking ? "Speaking..." : isListening ? "Listening - tap to stop" : isThinking ? "Thinking..." : "Tap to speak";
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full">
-      {/* Voice Orb */}
-      <div className="relative w-28 h-28">
-        <div className="absolute inset-0 rounded-full transition-transform duration-150" style={{ transform: `scale(${ringScale})`, background: isSpeaking ? "radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)" : isListening ? "radial-gradient(circle, rgba(245,158,11,0.06) 0%, transparent 70%)" : "transparent" }} />
-        <div className={`absolute inset-2 rounded-full border-2 transition-colors duration-300 ${isSpeaking ? "border-emerald-300" : isListening ? "border-amber-200" : "border-gray-200"} animate-breathe`} />
-        <div className={`absolute inset-5 rounded-full border-2 transition-colors duration-300 ${isSpeaking ? "border-emerald-400" : isListening ? "border-amber-300" : "border-gray-200"} animate-breathe`} style={{ animationDelay: "-1.3s" }} />
-        <div className={`absolute inset-7 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
-          isSpeaking ? "bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/25" :
-          isListening ? "bg-gradient-to-br from-amber-400 to-amber-500 shadow-amber-500/25" :
-          isThinking ? "bg-gradient-to-br from-blue-400 to-blue-500 shadow-blue-500/25" :
-          "bg-gradient-to-br from-gray-200 to-gray-300 shadow-gray-300/25"
-        }`}>
-          <span className="text-white text-xl font-bold select-none">ت</span>
-        </div>
-        {isSpeaking && <div className="absolute inset-5 rounded-full border-2 border-emerald-400/40 animate-ripple" />}
-      </div>
+    <>
+      {/* Expanded panel */}
+      {expanded && (
+        <div className="fixed inset-0 z-40 flex items-end justify-end p-4 pb-24">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setExpanded(false)} />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-200/80 overflow-hidden animate-slide-up" style={{ maxHeight: "70vh" }}>
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">T</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Taliq Assistant</p>
+                  <p className="text-[10px] text-gray-400">{statusText}</p>
+                </div>
+              </div>
+              <button onClick={() => setExpanded(false)} className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors">
+                <XIcon className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
 
-      {/* Status */}
-      <div className="text-center">
-        <p className={`text-sm font-semibold ${statusColor} transition-colors`}>{statusText}</p>
-        {isConnected && !isSpeaking && !isListening && !isThinking && (
-          <p className="text-[10px] text-gray-400 mt-0.5">Tap a quick action or speak</p>
-        )}
-      </div>
+            {/* Transcript */}
+            <div ref={chatRef} className="p-3 space-y-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: "40vh" }}>
+              {transcript.length === 0 && (
+                <p className="text-center text-xs text-gray-400 py-8">Start speaking or tap a quick action</p>
+              )}
+              {transcript.slice(-12).map((t, i) => (
+                <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className={`px-3 py-2 rounded-2xl text-xs max-w-[85%] ${
+                    t.role === "user"
+                      ? "bg-emerald-500 text-white rounded-br-sm"
+                      : "bg-gray-100 text-gray-700 rounded-bl-sm"
+                  }`}>
+                    {t.text}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-      {/* Live Transcript — auto-scrolls */}
-      {transcript.length > 0 && (
-        <div ref={chatRef} className="w-full max-w-xs max-h-40 overflow-y-auto px-3 space-y-1.5 scroll-smooth">
-          {transcript.slice(-8).map((t, i) => (
-            <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"} animate-slide-up`}>
-              <div className={`px-3 py-1.5 rounded-2xl text-xs max-w-[85%] ${
-                t.role === "user"
-                  ? "bg-emerald-500 text-white rounded-br-sm"
-                  : "bg-gray-100 text-gray-700 rounded-bl-sm"
-              }`}>
-                {t.text}
+            {/* Quick Actions */}
+            <div className="border-t border-gray-100 p-3">
+              <p className="text-[10px] text-gray-400 font-medium mb-2 uppercase tracking-wider">Quick Actions</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => {
+                      sendTextToAgent(action.prompt);
+                      onQuickAction?.(action.prompt);
+                    }}
+                    disabled={!isConnected}
+                    className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border transition-all group disabled:opacity-40 ${action.color}`}
+                  >
+                    <span className="text-sm font-bold">{action.letter}</span>
+                    <span className="text-[9px] font-medium leading-tight text-center">{action.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-2 px-4 w-full max-w-xs">
-        {QUICK_ACTIONS.map((action) => (
+      {/* Floating Orb - bottom right */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {/* Status pill */}
+        {isConnected && (isSpeaking || isListening || isThinking) && (
+          <div className="px-3 py-1.5 rounded-full bg-white shadow-lg border border-gray-100 animate-slide-up">
+            <p className={`text-[11px] font-medium ${
+              isSpeaking ? "text-emerald-600" : isListening ? "text-red-500" : "text-blue-500"
+            }`}>
+              {isSpeaking ? "Speaking..." : isListening ? "Listening..." : "Thinking..."}
+            </p>
+          </div>
+        )}
+
+        {/* Hint on first load */}
+        {isConnected && !isSpeaking && !isListening && !isThinking && transcript.length === 0 && (
+          <div className="px-3 py-1.5 rounded-full bg-white shadow-lg border border-gray-100 animate-slide-up">
+            <p className="text-[11px] text-gray-500">Tap to speak</p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          {/* Expand button */}
           <button
-            key={action.label}
-            onClick={() => {
-              sendTextToAgent(action.prompt);
-              onQuickAction?.(action.prompt);
-            }}
-            disabled={!isConnected}
-            className="flex flex-col items-center gap-1 p-2.5 rounded-xl bg-white border border-gray-100 hover:border-emerald-200 hover:shadow-sm hover:shadow-emerald-500/5 transition-all duration-300 group disabled:opacity-40"
+            onClick={() => setExpanded(!expanded)}
+            className="w-10 h-10 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-all"
           >
-            <span className="text-base group-hover:scale-110 transition-transform">{action.icon}</span>
-            <span className="text-[9px] font-medium text-gray-500 group-hover:text-emerald-600 transition-colors leading-tight text-center">{action.label}</span>
+            {expanded
+              ? <ChevronDownIcon className="w-4 h-4 text-gray-500" />
+              : <ChatIcon className="w-4 h-4 text-gray-500" />
+            }
           </button>
-        ))}
+
+          {/* Main orb - push to talk */}
+          <button
+            onClick={toggleMic}
+            onTouchStart={(e) => { e.preventDefault(); startListening(); }}
+            onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+            disabled={!isConnected}
+            className={`relative w-16 h-16 rounded-full ${orbBg} shadow-xl flex items-center justify-center transition-all duration-300 active:scale-95 disabled:opacity-50`}
+          >
+            {/* Pulse rings when active */}
+            {(isListening || isSpeaking) && (
+              <>
+                <div className="absolute inset-0 rounded-full border-2 border-white/20 animate-ripple" />
+                <div className="absolute -inset-1 rounded-full border border-white/10 animate-ripple" style={{ animationDelay: "0.5s" }} />
+              </>
+            )}
+
+            {/* Ring scale effect */}
+            <div
+              className="absolute inset-0 rounded-full transition-transform duration-150"
+              style={{
+                transform: `scale(${ringScale})`,
+                background: isListening
+                  ? "radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%)"
+                  : isSpeaking
+                  ? "radial-gradient(circle, rgba(16,185,129,0.15) 0%, transparent 70%)"
+                  : "transparent",
+              }}
+            />
+
+            {/* Icon */}
+            <div className="relative z-10">
+              {isSpeaking
+                ? <SpeakerIcon className="w-6 h-6 text-white" />
+                : <MicIcon className="w-6 h-6 text-white" />
+              }
+            </div>
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
-
-const QUICK_ACTIONS = [
-  { label: "Leave Balance", icon: "🏖️", prompt: "Show me my leave balance" },
-  { label: "My Profile", icon: "👤", prompt: "Show my profile" },
-  { label: "Pay Slip", icon: "💰", prompt: "Show my pay slip" },
-  { label: "Team Status", icon: "👥", prompt: "Show team attendance" },
-  { label: "My Loans", icon: "🏦", prompt: "Show my loan balance" },
-  { label: "Approvals", icon: "✅", prompt: "Show pending approvals" },
-  { label: "Documents", icon: "📄", prompt: "Show my documents" },
-  { label: "Announcements", icon: "📢", prompt: "Show announcements" },
-  { label: "Travel", icon: "✈️", prompt: "Calculate travel allowance for Dubai 3 days" },
-];

@@ -26,8 +26,6 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
   const handleDecision = (item: ApprovalItem, decision: "approved" | "rejected") => {
     setProcessingId(item.id);
     onAction?.("approve_leave", { request_id: item.id, decision });
-    
-    // Optimistic update
     setTimeout(() => {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: decision } : i));
       setProcessingId(null);
@@ -47,13 +45,15 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
       <div className="divide-y divide-gray-100">
         {items.length === 0 ? (
           <div className="p-8 text-center">
-            <span className="text-2xl mb-2 block">✅</span>
+            <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-2">
+              <span className="text-emerald-600 font-bold">ok</span>
+            </div>
             <p className="text-sm text-gray-400">All caught up!</p>
           </div>
         ) : items.map((item) => {
           const isExpanded = expandedId === item.id;
           const isProcessing = processingId === item.id;
-          
+
           return (
             <div
               key={item.id}
@@ -62,7 +62,6 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
                 item.status === "rejected" ? "bg-red-50/30" : ""
               }`}
             >
-              {/* Main row — clickable to expand */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : item.id)}
                 className="w-full p-4 text-left hover:bg-gray-50/50 transition-colors"
@@ -70,9 +69,7 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-gray-800">{item.employeeName}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {item.type} • {item.days} days
-                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{item.type} - {item.days} days</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`badge ${
@@ -88,7 +85,6 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
                 </div>
               </button>
 
-              {/* Expanded details */}
               {isExpanded && (
                 <div className="px-4 pb-4 animate-slide-up">
                   <div className="bg-gray-50 rounded-xl p-3 space-y-2 mb-3">
@@ -117,14 +113,14 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
                         disabled={isProcessing}
                         className="flex-1 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 active:scale-[0.98] transition-all disabled:opacity-50"
                       >
-                        ✓ Approve
+                        Approve
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDecision(item, "rejected"); }}
                         disabled={isProcessing}
                         className="flex-1 py-2 rounded-xl bg-white border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 active:scale-[0.98] transition-all disabled:opacity-50"
                       >
-                        ✕ Reject
+                        Reject
                       </button>
                     </div>
                   )}
@@ -135,14 +131,13 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
         })}
       </div>
 
-      {/* Processed summary */}
       {processed.length > 0 && (
         <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex gap-3">
           {processed.filter(p => p.status === "approved").length > 0 && (
-            <span className="text-[10px] text-emerald-600">✓ {processed.filter(p => p.status === "approved").length} approved</span>
+            <span className="text-[10px] text-emerald-600">{processed.filter(p => p.status === "approved").length} approved</span>
           )}
           {processed.filter(p => p.status === "rejected").length > 0 && (
-            <span className="text-[10px] text-red-500">✕ {processed.filter(p => p.status === "rejected").length} rejected</span>
+            <span className="text-[10px] text-red-500">{processed.filter(p => p.status === "rejected").length} rejected</span>
           )}
         </div>
       )}

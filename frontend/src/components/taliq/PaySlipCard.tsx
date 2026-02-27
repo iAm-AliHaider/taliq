@@ -25,18 +25,16 @@ export function PaySlipCard({ employeeName, month, basic, housing, transport, de
       <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-800">Pay Slip</h3>
-          <p className="text-xs text-gray-400">{employeeName} • {month}</p>
+          <p className="text-xs text-gray-400">{employeeName} - {month}</p>
         </div>
         <span className="badge badge-blue">{month}</span>
       </div>
 
-      {/* Net pay highlight */}
       <div className="px-5 py-4 bg-gradient-to-r from-emerald-50 to-emerald-50/50 border-b border-gray-100">
         <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">Net Pay</p>
         <p className="text-2xl font-bold text-emerald-600">{fmt(netPay)} <span className="text-sm font-normal text-gray-400">{currency}</span></p>
       </div>
 
-      {/* Summary row */}
       <div className="grid grid-cols-3 gap-px bg-gray-100">
         <div className="bg-white p-3 text-center">
           <p className="text-[10px] text-gray-400">Gross</p>
@@ -52,7 +50,6 @@ export function PaySlipCard({ employeeName, month, basic, housing, transport, de
         </div>
       </div>
 
-      {/* Expandable breakdown */}
       <button
         onClick={() => setShowBreakdown(!showBreakdown)}
         className="w-full px-5 py-2.5 flex items-center justify-between text-xs text-gray-400 hover:text-emerald-600 hover:bg-gray-50 transition-all border-t border-gray-100"
@@ -79,12 +76,11 @@ export function PaySlipCard({ employeeName, month, basic, housing, transport, de
             <Row label="GOSI (9.75%)" amount={-(gosiDeduction || deductions)} currency={currency} color="text-red-500" />
           </div>
 
-          {/* Download action */}
           <button
             onClick={() => onAction?.("download_payslip", { month })}
             className="w-full mt-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-100 active:scale-[0.98] transition-all"
           >
-            📥 Download PDF
+            Download PDF
           </button>
         </div>
       )}

@@ -30,10 +30,10 @@ export function TaliqProvider({ children, token }: TaliqProviderProps) {
     const id = msg.id || `${msg.component}-${Date.now()}`;
     const category = msg.category || msg.component;
     const newItem: ComponentItem = { id, component: msg.component, props: msg.props, category, timestamp: Date.now() };
-    setComponents(prev => {
-      const filtered = prev.filter(c => c.category !== category);
-      return [...filtered, newItem];
-    });
+    
+    // ONLY keep the new card — clears everything else
+    // Each new agent response replaces all previous cards
+    setComponents([newItem]);
   }, []);
 
   const handleDataReceived = createDataChannelHandler(handleMessage);
@@ -55,7 +55,6 @@ function Inner({ onDataReceived, components, children }: {
 }) {
   const room = useRoomContext();
 
-  // Listen for data channel
   useEffect(() => {
     if (!room) return;
     const handler = (payload: Uint8Array, participant: unknown, kind: any, topic?: string) => {
@@ -65,7 +64,6 @@ function Inner({ onDataReceived, components, children }: {
     return () => { room.off(RoomEvent.DataReceived, handler); };
   }, [room, onDataReceived]);
 
-  // Action sender
   const sendAction = useCallback(async (action: string, payload: Record<string, unknown>) => {
     if (!room?.localParticipant) return;
     try {

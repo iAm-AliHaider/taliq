@@ -13,9 +13,9 @@ interface Props {
 
 export function AnnouncementCard({ title, content, author, date, priority = "normal", acknowledged, acknowledgedCount, totalCount }: Props) {
   const priorityConfig = {
-    normal: { bg: "bg-blue-50", border: "border-blue-100", badge: "badge-blue", icon: "📢" },
-    important: { bg: "bg-amber-50", border: "border-amber-100", badge: "badge-gold", icon: "⚠️" },
-    urgent: { bg: "bg-red-50", border: "border-red-100", badge: "badge-red", icon: "🚨" },
+    normal: { bg: "bg-blue-50", border: "border-blue-100", badge: "badge-blue", iconBg: "bg-blue-100 text-blue-600" },
+    important: { bg: "bg-amber-50", border: "border-amber-100", badge: "badge-gold", iconBg: "bg-amber-100 text-amber-600" },
+    urgent: { bg: "bg-red-50", border: "border-red-100", badge: "badge-red", iconBg: "bg-red-100 text-red-600" },
   };
   const p = priorityConfig[priority];
 
@@ -23,7 +23,10 @@ export function AnnouncementCard({ title, content, author, date, priority = "nor
     <div className="card overflow-hidden">
       <div className={`px-5 py-3 ${p.bg} border-b ${p.border} flex items-center justify-between`}>
         <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-          <span>{p.icon}</span> Announcement
+          <div className={`w-6 h-6 rounded-full ${p.iconBg} flex items-center justify-center`}>
+            <span className="text-[10px] font-bold">A</span>
+          </div>
+          Announcement
         </h3>
         <span className={`badge ${p.badge}`}>{priority}</span>
       </div>
@@ -44,7 +47,7 @@ export function AnnouncementCard({ title, content, author, date, priority = "nor
           )}
         </div>
 
-        {acknowledgedCount !== undefined && totalCount !== undefined && (
+        {acknowledgedCount !== undefined && totalCount !== undefined && totalCount > 0 && (
           <div>
             <div className="flex justify-between mb-1">
               <span className="text-[10px] text-gray-400">Acknowledgment Rate</span>

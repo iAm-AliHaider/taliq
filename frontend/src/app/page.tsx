@@ -17,16 +17,6 @@ function AuroraBackground() {
   );
 }
 
-function FloatingParticles() {
-  return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div key={i} className="absolute w-1 h-1 rounded-full bg-emerald-500/15" style={{ left: `${Math.random() * 100}%`, top: `${100 + Math.random() * 20}%`, animation: `drift ${15 + Math.random() * 25}s linear infinite`, animationDelay: `${Math.random() * 20}s` }} />
-      ))}
-    </div>
-  );
-}
-
 export default function Home() {
   const [token, setToken] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -83,7 +73,6 @@ export default function Home() {
   return (
     <div className="min-h-[100dvh] bg-[#FAFBFC] flex flex-col relative">
       <AuroraBackground />
-      <FloatingParticles />
 
       {/* Header */}
       <header className="relative z-10 flex-shrink-0 border-b border-gray-200/80 safe-top">
@@ -104,21 +93,13 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main */}
+      {/* Full-screen card area */}
       <TaliqProvider token={token}>
         {(components, actions) => (
-          <main className="relative z-10 flex-1 flex flex-col md:flex-row overflow-hidden">
-            {/* Voice Panel */}
-            <div className="flex-shrink-0 md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-gray-200/80 overflow-y-auto">
-              <div className="flex flex-col items-center justify-center py-6 md:py-0 md:h-full" style={{ background: "linear-gradient(180deg, rgba(16,185,129,0.02) 0%, transparent 100%)" }}>
-                <VoiceAgent />
-              </div>
-            </div>
-
-            {/* HR Panel */}
-            <div className="flex-1 overflow-hidden bg-gray-50/50">
-              <GenerativePanel components={components} actions={actions} />
-            </div>
+          <main className="relative z-10 flex-1 overflow-hidden bg-gray-50/50">
+            <GenerativePanel components={components} actions={actions} />
+            {/* Floating voice agent */}
+            <VoiceAgent />
           </main>
         )}
       </TaliqProvider>

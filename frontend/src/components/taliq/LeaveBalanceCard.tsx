@@ -10,7 +10,6 @@ interface Props {
 }
 
 export function LeaveBalanceCard({ employeeName, annual, sick, emergency, study, onAction }: Props) {
-  const total = 30; // max annual for reference
   const leaves = [
     { label: "Annual", value: annual, max: 30, color: "bg-emerald-500", bgColor: "bg-emerald-50", textColor: "text-emerald-700" },
     { label: "Sick", value: sick, max: 30, color: "bg-blue-500", bgColor: "bg-blue-50", textColor: "text-blue-700" },
