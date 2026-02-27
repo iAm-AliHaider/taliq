@@ -4,19 +4,19 @@ interface Props {
   employeeName: string;
   documentType: string;
   requestDate?: string;
-  status: "requested" | "processing" | "ready" | "delivered";
+  status: string;
   estimatedDate?: string;
   referenceNumber?: string;
 }
 
 export function DocumentRequestCard({ employeeName, documentType, requestDate, status, estimatedDate, referenceNumber }: Props) {
-  const statusConfig = {
+  const statusConfig: Record<string, any> = {
     requested: { badge: "badge-blue", label: "Requested", icon: "📋", step: 1 },
     processing: { badge: "badge-gold", label: "Processing", icon: "⏳", step: 2 },
     ready: { badge: "badge-emerald", label: "Ready", icon: "✅", step: 3 },
     delivered: { badge: "badge-gray", label: "Delivered", icon: "📬", step: 4 },
   };
-  const s = statusConfig[status];
+  const s = statusConfig[status] || statusConfig[Object.keys(statusConfig)[0]];
   const steps = ["Requested", "Processing", "Ready", "Delivered"];
 
   return (

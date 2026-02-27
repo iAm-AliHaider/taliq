@@ -9,7 +9,7 @@ interface Props {
   questionType: string;
   timeMinutes: number;
   scores: number[];
-  status: "in_progress" | "completed";
+  status: string;
   averageScore?: number;
 }
 

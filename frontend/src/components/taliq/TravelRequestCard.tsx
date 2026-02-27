@@ -10,7 +10,7 @@ interface Props {
   perDiem?: number;
   totalAllowance?: number;
   currency?: string;
-  status: "draft" | "pending" | "approved" | "rejected" | "completed";
+  status: string;
   flightBooked?: boolean;
   hotelBooked?: boolean;
   visaRequired?: boolean;
@@ -18,14 +18,14 @@ interface Props {
 }
 
 export function TravelRequestCard({ employeeName, destination, travelType, startDate, endDate, days, perDiem, totalAllowance, currency = "SAR", status, flightBooked, hotelBooked, visaRequired, visaStatus }: Props) {
-  const statusConfig = {
+  const statusConfig: Record<string, any> = {
     draft: { badge: "badge-gray", label: "Draft" },
     pending: { badge: "badge-gold", label: "Pending" },
     approved: { badge: "badge-emerald", label: "Approved" },
     rejected: { badge: "badge-red", label: "Rejected" },
     completed: { badge: "badge-blue", label: "Completed" },
   };
-  const s = statusConfig[status];
+  const s = statusConfig[status] || statusConfig[Object.keys(statusConfig)[0]];
   const fmt = (n: number) => n.toLocaleString();
 
   return (
