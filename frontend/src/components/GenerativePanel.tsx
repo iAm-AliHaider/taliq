@@ -24,6 +24,12 @@ import { ClockInCard } from "./taliq/ClockInCard";
 import { MyAttendanceCard } from "./taliq/MyAttendanceCard";
 import { QuickDashboard } from "./taliq/QuickDashboard";
 import { LeaveHistoryCard } from "./taliq/LeaveHistoryCard";
+import { PerformanceReviewCard } from "./taliq/PerformanceReviewCard";
+import { GoalsCard } from "./taliq/GoalsCard";
+import { TrainingCatalogCard } from "./taliq/TrainingCatalogCard";
+import { MyTrainingsCard } from "./taliq/MyTrainingsCard";
+import { GrievanceListCard } from "./taliq/GrievanceListCard";
+import { NotificationCard } from "./taliq/NotificationCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -48,6 +54,12 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   MyAttendanceCard,
   QuickDashboard,
   LeaveHistoryCard,
+  PerformanceReviewCard,
+  GoalsCard,
+  TrainingCatalogCard,
+  MyTrainingsCard,
+  GrievanceListCard,
+  NotificationCard,
 };
 
 interface Props {

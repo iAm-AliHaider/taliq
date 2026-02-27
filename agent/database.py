@@ -158,11 +158,94 @@ def init_db():
         answered_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (interview_id) REFERENCES interviews(id)
     );
+
+    CREATE TABLE IF NOT EXISTS performance_reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id TEXT NOT NULL,
+        reviewer_id TEXT NOT NULL,
+        period TEXT NOT NULL,
+        rating INTEGER DEFAULT 3,
+        goals_met INTEGER DEFAULT 0,
+        total_goals INTEGER DEFAULT 5,
+        strengths TEXT,
+        improvements TEXT,
+        comments TEXT,
+        status TEXT DEFAULT 'draft',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (employee_id) REFERENCES employees(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS performance_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id TEXT NOT NULL,
+        goal TEXT NOT NULL,
+        target TEXT,
+        progress INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        due_date TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (employee_id) REFERENCES employees(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS training_courses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        provider TEXT,
+        duration_hours REAL DEFAULT 4,
+        category TEXT DEFAULT 'general',
+        mandatory INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'available'
+    );
+
+    CREATE TABLE IF NOT EXISTS employee_trainings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id TEXT NOT NULL,
+        course_id INTEGER NOT NULL,
+        enrollment_date TEXT DEFAULT (date('now')),
+        completion_date TEXT,
+        score REAL,
+        certificate_ref TEXT,
+        status TEXT DEFAULT 'enrolled',
+        FOREIGN KEY (employee_id) REFERENCES employees(id),
+        FOREIGN KEY (course_id) REFERENCES training_courses(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS grievances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ref TEXT UNIQUE,
+        employee_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        description TEXT,
+        severity TEXT DEFAULT 'medium',
+        status TEXT DEFAULT 'submitted',
+        assigned_to TEXT,
+        resolution TEXT,
+        submitted_at TEXT DEFAULT (datetime('now')),
+        resolved_at TEXT,
+        FOREIGN KEY (employee_id) REFERENCES employees(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT,
+        read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (employee_id) REFERENCES employees(id)
+    );
     """)
 
     # Seed if empty
     if c.execute("SELECT COUNT(*) FROM employees").fetchone()[0] == 0:
         _seed_data(c)
+
+    # Seed training courses
+    if c.execute("SELECT COUNT(*) FROM training_courses").fetchone()[0] == 0:
+        _seed_training_courses(c)
 
     conn.commit()
     conn.close()
@@ -1075,6 +1158,210 @@ def get_interview_responses(interview_id: int) -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+
+def _seed_training_courses(c):
+    courses = [
+        ("Safety Compliance", "OSHA workplace safety standards and emergency procedures", "Internal", 8, "compliance", 1),
+        ("Leadership Workshop", "Developing leadership skills for mid-level managers", "Dale Carnegie", 16, "leadership", 0),
+        ("Excel Advanced", "Pivot tables, VLOOKUP, macros, and data analysis", "Microsoft", 6, "technical", 0),
+        ("Project Management Professional", "PMP preparation and Agile methodology", "PMI", 40, "professional", 0),
+        ("Cybersecurity Awareness", "Phishing prevention, password security, data protection", "Internal", 4, "compliance", 1),
+        ("First Aid & CPR", "Emergency response and basic life support certification", "Red Crescent", 8, "safety", 1),
+        ("Business Communication", "Professional writing and presentation skills", "External", 12, "professional", 0),
+        ("Arabic Business Writing", "Formal correspondence and report writing in Arabic", "Internal", 6, "language", 0),
+    ]
+    for title, desc, provider, hours, cat, mandatory in courses:
+        c.execute("INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory) VALUES (?,?,?,?,?,?)",
+                  (title, desc, provider, hours, cat, mandatory))
+
+
+# -- Performance Review CRUD -----------------------------
+
+def create_review(reviewer_id: str, employee_id: str, period: str, rating: int, strengths: str, improvements: str, comments: str = "") -> dict:
+    conn = get_db()
+    rating = max(1, min(5, rating))
+    goals = conn.execute("SELECT COUNT(*) as total, SUM(CASE WHEN progress >= 100 THEN 1 ELSE 0 END) as met FROM performance_goals WHERE employee_id = ?", (employee_id,)).fetchone()
+    conn.execute(
+        "INSERT INTO performance_reviews (employee_id, reviewer_id, period, rating, goals_met, total_goals, strengths, improvements, comments, status) VALUES (?,?,?,?,?,?,?,?,?,'completed')",
+        (employee_id, reviewer_id, period, rating, goals["met"] or 0, goals["total"] or 0, strengths, improvements, comments)
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM performance_reviews WHERE employee_id = ? ORDER BY created_at DESC LIMIT 1", (employee_id,)).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_employee_reviews(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT pr.*, e.name as reviewer_name FROM performance_reviews pr LEFT JOIN employees e ON pr.reviewer_id = e.id WHERE pr.employee_id = ? ORDER BY created_at DESC", (emp_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_pending_reviews(reviewer_id: str) -> list[dict]:
+    conn = get_db()
+    reports = get_direct_reports(reviewer_id)
+    report_ids = [r["id"] for r in reports]
+    if not report_ids:
+        conn.close()
+        return []
+    reviewed = conn.execute("SELECT employee_id FROM performance_reviews WHERE reviewer_id = ? AND period = ?", (reviewer_id, "Q1 2026")).fetchall()
+    reviewed_ids = {r["employee_id"] for r in reviewed}
+    pending = [r for r in reports if r["id"] not in reviewed_ids]
+    conn.close()
+    return pending
+
+
+def set_goal(emp_id: str, goal: str, target: str, due_date: str) -> dict:
+    conn = get_db()
+    conn.execute("INSERT INTO performance_goals (employee_id, goal, target, due_date) VALUES (?,?,?,?)", (emp_id, goal, target, due_date))
+    conn.commit()
+    row = conn.execute("SELECT * FROM performance_goals WHERE employee_id = ? ORDER BY id DESC LIMIT 1", (emp_id,)).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_goals(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM performance_goals WHERE employee_id = ? ORDER BY due_date", (emp_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_goal_progress(goal_id: int, progress: int) -> dict:
+    conn = get_db()
+    progress = max(0, min(100, progress))
+    status = "completed" if progress >= 100 else "active"
+    conn.execute("UPDATE performance_goals SET progress = ?, status = ? WHERE id = ?", (progress, status, goal_id))
+    conn.commit()
+    row = conn.execute("SELECT * FROM performance_goals WHERE id = ?", (goal_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else {"error": "Goal not found"}
+
+
+# -- Training CRUD ---------------------------------------
+
+def get_available_courses() -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM training_courses WHERE status = 'available' ORDER BY mandatory DESC, title").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def enroll_in_course(emp_id: str, course_id: int) -> dict:
+    conn = get_db()
+    existing = conn.execute("SELECT * FROM employee_trainings WHERE employee_id = ? AND course_id = ? AND status != 'dropped'", (emp_id, course_id)).fetchone()
+    if existing:
+        conn.close()
+        return {"error": "Already enrolled", "record": dict(existing)}
+    conn.execute("INSERT INTO employee_trainings (employee_id, course_id) VALUES (?,?)", (emp_id, course_id))
+    conn.commit()
+    row = conn.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND et.course_id = ?", (emp_id, course_id)).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_my_trainings(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT et.*, tc.title, tc.duration_hours, tc.category, tc.mandatory FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? ORDER BY et.enrollment_date DESC", (emp_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def complete_training(emp_id: str, course_id: int, score: float) -> dict:
+    conn = get_db()
+    cert_ref = f"CERT-{emp_id}-{course_id}-2026"
+    conn.execute("UPDATE employee_trainings SET status = 'completed', completion_date = date('now'), score = ?, certificate_ref = ? WHERE employee_id = ? AND course_id = ?", (score, cert_ref, emp_id, course_id))
+    conn.commit()
+    row = conn.execute("SELECT et.*, tc.title FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND et.course_id = ?", (emp_id, course_id)).fetchone()
+    conn.close()
+    return dict(row) if row else {"error": "Enrollment not found"}
+
+
+def get_training_stats(emp_id: str) -> dict:
+    conn = get_db()
+    total = conn.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = ?", (emp_id,)).fetchone()[0]
+    completed = conn.execute("SELECT COUNT(*) FROM employee_trainings WHERE employee_id = ? AND status = 'completed'", (emp_id,)).fetchone()[0]
+    mandatory_total = conn.execute("SELECT COUNT(*) FROM training_courses WHERE mandatory = 1").fetchone()[0]
+    mandatory_done = conn.execute("SELECT COUNT(*) FROM employee_trainings et JOIN training_courses tc ON et.course_id = tc.id WHERE et.employee_id = ? AND tc.mandatory = 1 AND et.status = 'completed'", (emp_id,)).fetchone()[0]
+    conn.close()
+    return {"total_enrolled": total, "completed": completed, "mandatory_total": mandatory_total, "mandatory_completed": mandatory_done, "compliance": round((mandatory_done / mandatory_total * 100) if mandatory_total > 0 else 100)}
+
+
+# -- Grievance CRUD --------------------------------------
+
+def submit_grievance(emp_id: str, category: str, subject: str, description: str, severity: str = "medium") -> dict:
+    conn = get_db()
+    count = conn.execute("SELECT COUNT(*) FROM grievances").fetchone()[0]
+    ref = f"GRV-2026-{count + 1:03d}"
+    conn.execute("INSERT INTO grievances (ref, employee_id, category, subject, description, severity) VALUES (?,?,?,?,?,?)", (ref, emp_id, category, subject, description, severity))
+    conn.commit()
+    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_my_grievances(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM grievances WHERE employee_id = ? ORDER BY submitted_at DESC", (emp_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_grievances() -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT g.*, e.name as employee_name FROM grievances g JOIN employees e ON g.employee_id = e.id ORDER BY submitted_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_grievance_status(ref: str, status: str, resolution: str = "") -> dict:
+    conn = get_db()
+    updates = "status = ?"
+    params = [status]
+    if status in ("resolved", "closed"):
+        updates += ", resolved_at = datetime('now'), resolution = ?"
+        params.append(resolution)
+    params.append(ref)
+    conn.execute(f"UPDATE grievances SET {updates} WHERE ref = ?", params)
+    conn.commit()
+    row = conn.execute("SELECT * FROM grievances WHERE ref = ?", (ref,)).fetchone()
+    conn.close()
+    return dict(row) if row else {"error": "Not found"}
+
+
+# -- Notifications CRUD ----------------------------------
+
+def create_notification(emp_id: str, ntype: str, title: str, message: str) -> dict:
+    conn = get_db()
+    conn.execute("INSERT INTO notifications (employee_id, type, title, message) VALUES (?,?,?,?)", (emp_id, ntype, title, message))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+def get_unread_notifications(emp_id: str) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM notifications WHERE employee_id = ? AND read = 0 ORDER BY created_at DESC", (emp_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_all_notifications(emp_id: str, limit: int = 20) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM notifications WHERE employee_id = ? ORDER BY created_at DESC LIMIT ?", (emp_id, limit)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def mark_notification_read(notif_id: int) -> dict:
+    conn = get_db()
+    conn.execute("UPDATE notifications SET read = 1 WHERE id = ?", (notif_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 # Auto-init on import
