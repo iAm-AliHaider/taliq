@@ -20,6 +20,8 @@ import { TravelRequestCard } from "./taliq/TravelRequestCard";
 import { TravelRequestForm } from "./taliq/TravelRequestForm";
 import { ManagerDashboard } from "./taliq/ManagerDashboard";
 import { TeamOverviewCard } from "./taliq/TeamOverviewCard";
+import { ClockInCard } from "./taliq/ClockInCard";
+import { MyAttendanceCard } from "./taliq/MyAttendanceCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -40,6 +42,8 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   TravelRequestForm,
   ManagerDashboard,
   TeamOverviewCard,
+  ClockInCard,
+  MyAttendanceCard,
 };
 
 interface Props {

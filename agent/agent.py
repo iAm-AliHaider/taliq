@@ -65,6 +65,18 @@ The forms have SUBMIT buttons. When user submits via the form, you'll get a form
 Process it and confirm the result via voice.
 
 For READ operations, show the display cards as before.
+
+ATTENDANCE:
+- "Clock me in" / "I'm at work" -> clock_me_in
+- "Clock me out" / "I'm leaving" -> clock_me_out
+- "Show my attendance" -> show_my_attendance
+- "Request overtime" -> request_overtime_approval
+
+AI INTERVIEWER:
+- "Start interview for [name]" -> start_new_interview (needs candidate_name + position)
+- After each answer, score 1-5 -> score_current_answer
+- "Show interview results" -> show_interview_results
+Interview stages: hr_screening (default), technical, behavioral, leadership.
 """
 
 
@@ -698,6 +710,219 @@ async def show_leave_calendar(context: RunContext):
     return f"Showing {len(leaves)} approved leaves."
 
 
+# ---- ATTENDANCE TOOLS ----
+
+
+@function_tool()
+async def clock_me_in(context: RunContext, location: str = "office"):
+    """Clock in the employee for today. Call when user says 'clock me in' or 'I'm at work'."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Employee not found."
+    result = db.clock_in(emp_id, location)
+    if "error" in result:
+        await _send_ui("StatusBanner", {"message": result["error"], "type": "warning"}, "main_card")
+        return result["error"]
+    status = "on time" if result["status"] == "present" else "late"
+    await _send_ui("ClockInCard", {
+        "employeeName": emp["name"],
+        "date": result["date"],
+        "clockIn": result["clock_in"],
+        "status": result["status"],
+        "location": location,
+        "mode": "clocked_in",
+    }, "main_card")
+    return f"Clocked in at {result['clock_in']}, {status}. Location: {location}."
+
+
+@function_tool()
+async def clock_me_out(context: RunContext):
+    """Clock out the employee for today. Call when user says 'clock me out' or 'I'm leaving'."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Employee not found."
+    result = db.clock_out(emp_id)
+    if "error" in result:
+        await _send_ui("StatusBanner", {"message": result["error"], "type": "warning"}, "main_card")
+        return result["error"]
+    await _send_ui("ClockInCard", {
+        "employeeName": emp["name"],
+        "date": result["date"],
+        "clockIn": result["clock_in"],
+        "clockOut": result["clock_out"],
+        "hoursWorked": result["hours_worked"],
+        "overtimeHours": result["overtime_hours"],
+        "status": result["status"],
+        "mode": "clocked_out",
+    }, "main_card")
+    return f"Clocked out at {result['clock_out']}. Worked {result['hours_worked']} hours."
+
+
+@function_tool()
+async def show_my_attendance(context: RunContext, days: int = 7):
+    """Show my attendance for the last N days. Call when user asks about attendance history."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    if not emp:
+        return "Employee not found."
+    records = db.get_my_attendance(emp_id, days)
+    today = db.get_today_attendance(emp_id)
+    await _send_ui("MyAttendanceCard", {
+        "employeeName": emp["name"],
+        "records": records,
+        "today": today,
+        "days": days,
+    }, "main_card")
+    present = sum(1 for r in records if r["status"] in ("present", "late", "remote"))
+    return f"{present}/{len(records)} days present in last {days} days."
+
+
+@function_tool()
+async def request_overtime_approval(context: RunContext, hours: float, reason: str):
+    """Request overtime approval. Call when user wants to log overtime hours."""
+    emp_id = get_current_employee_id_from_context()
+    result = db.request_overtime(emp_id, hours, reason)
+    if "error" in result:
+        return result["error"]
+    await _send_ui("StatusBanner", {
+        "message": f"Overtime request: {hours}h - {reason}. Sent to manager.",
+        "type": "success",
+    }, "main_card")
+    return f"Overtime of {hours} hours requested. Pending manager approval."
+
+
+# ---- INTERVIEW TOOLS ----
+
+
+@function_tool()
+async def start_new_interview(context: RunContext, candidate_name: str, position: str, stage: str = "hr_screening"):
+    """Start a new AI-powered interview. Stage can be: hr_screening, technical, behavioral, leadership."""
+    emp_id = get_current_employee_id_from_context()
+    # Check if already has active interview
+    active = db.get_current_interview(emp_id)
+    if active:
+        await _send_ui("StatusBanner", {
+            "message": f"You have an active interview ({active['ref']}) with {active['candidate_name']}. Complete it first.",
+            "type": "warning",
+        }, "main_card")
+        return f"Active interview exists: {active['ref']} with {active['candidate_name']}."
+    
+    iv = db.start_interview(emp_id, candidate_name, position, stage)
+    q = db.get_interview_question(iv["id"], 0)
+    
+    await _send_ui("InterviewPanel", {
+        "title": f"{stage.replace('_', ' ').title()} Interview",
+        "candidateName": candidate_name,
+        "position": position,
+        "currentQuestion": 1,
+        "totalQuestions": iv["total_questions"],
+        "question": q["question"],
+        "questionType": q["type"],
+        "timeMinutes": q["time_minutes"],
+        "scores": [],
+        "status": "in_progress",
+        "interviewRef": iv["ref"],
+        "stage": stage,
+    }, "main_card")
+    return f"Interview {iv['ref']} started! {stage.replace('_', ' ').title()} for {candidate_name} ({position}). Question 1: {q['question']}"
+
+
+@function_tool()
+async def score_current_answer(context: RunContext, score: int, feedback: str = ""):
+    """Score the candidate's answer (1-5) and move to next question. 1=Poor, 2=Below Average, 3=Average, 4=Good, 5=Excellent."""
+    emp_id = get_current_employee_id_from_context()
+    iv = db.get_current_interview(emp_id)
+    if not iv:
+        return "No active interview. Start one first."
+    
+    current_q = iv["current_question"]
+    result = db.score_answer(iv["id"], current_q, score, feedback)
+    if "error" in result:
+        return result["error"]
+    
+    # Get all scores so far
+    responses = db.get_interview_responses(iv["id"])
+    all_scores = [r["score"] for r in responses]
+    
+    # Check if interview is complete
+    if current_q + 1 >= iv["total_questions"]:
+        completed = db.complete_interview(iv["id"])
+        await _send_ui("InterviewPanel", {
+            "title": f"{iv['stage'].replace('_', ' ').title()} Interview",
+            "candidateName": iv["candidate_name"],
+            "position": iv["position"],
+            "currentQuestion": iv["total_questions"],
+            "totalQuestions": iv["total_questions"],
+            "question": "",
+            "questionType": "",
+            "timeMinutes": 0,
+            "scores": all_scores,
+            "status": "completed",
+            "averageScore": completed["average_score"],
+            "interviewRef": iv["ref"],
+        }, "main_card")
+        return f"Interview complete! Average score: {completed['average_score']}/5. {candidate_rating(completed['average_score'])}"
+    
+    # Get next question
+    next_q = db.get_interview_question(iv["id"], current_q + 1)
+    await _send_ui("InterviewPanel", {
+        "title": f"{iv['stage'].replace('_', ' ').title()} Interview",
+        "candidateName": iv["candidate_name"],
+        "position": iv["position"],
+        "currentQuestion": current_q + 2,
+        "totalQuestions": iv["total_questions"],
+        "question": next_q["question"],
+        "questionType": next_q["type"],
+        "timeMinutes": next_q["time_minutes"],
+        "scores": all_scores,
+        "status": "in_progress",
+        "interviewRef": iv["ref"],
+    }, "main_card")
+    return f"Scored {score}/5. Next question {current_q + 2}: {next_q['question']}"
+
+
+@function_tool()
+async def show_interview_results(context: RunContext):
+    """Show results of the last completed interview."""
+    emp_id = get_current_employee_id_from_context()
+    conn = db.get_db()
+    row = conn.execute(
+        "SELECT * FROM interviews WHERE interviewer_id = ? ORDER BY completed_at DESC LIMIT 1",
+        (emp_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return "No interviews found."
+    iv = dict(row)
+    responses = db.get_interview_responses(iv["id"])
+    all_scores = [r["score"] for r in responses]
+    
+    await _send_ui("InterviewPanel", {
+        "title": f"{iv['stage'].replace('_', ' ').title()} Interview",
+        "candidateName": iv["candidate_name"],
+        "position": iv["position"],
+        "currentQuestion": iv["total_questions"],
+        "totalQuestions": iv["total_questions"],
+        "question": "",
+        "questionType": "",
+        "timeMinutes": 0,
+        "scores": all_scores,
+        "status": iv["status"],
+        "averageScore": iv["average_score"],
+        "interviewRef": iv["ref"],
+    }, "main_card")
+    return f"Interview {iv['ref']}: {iv['candidate_name']} for {iv['position']}. Score: {iv['average_score']}/5."
+
+
+def candidate_rating(score: float) -> str:
+    if score >= 4.5: return "Strongly recommend hiring."
+    if score >= 3.5: return "Recommend hiring."
+    if score >= 2.5: return "Consider with reservations."
+    return "Do not recommend."
+
+
 # ---- AGENT TOOLS LIST ----
 
 ALL_TOOLS = [
@@ -725,6 +950,15 @@ ALL_TOOLS = [
     apply_for_loan,
     request_document,
     create_travel_request,
+    # Attendance
+    clock_me_in,
+    clock_me_out,
+    show_my_attendance,
+    request_overtime_approval,
+    # Interview
+    start_new_interview,
+    score_current_answer,
+    show_interview_results,
     # Manager
     show_team_overview,
     show_department_stats,
@@ -786,6 +1020,8 @@ async def _handle_data(data: rtc.DataPacket):
             "apply_leave_prompt": lambda: "I want to apply for leave. Show the leave form.",
             "download_payslip": lambda: f"Show pay slip for {msg.get('month', 'this month')}",
             "apply_loan": lambda: "I want to apply for a loan. Show the loan form.",
+            "clock_in": lambda: f"Clock me in at {msg.get('location', 'office')}",
+            "clock_out": lambda: "Clock me out",
         }
         handler = action_map.get(action)
         text = handler() if handler else f"User action: {action}"
@@ -802,8 +1038,14 @@ async def _handle_data(data: rtc.DataPacket):
 
 async def entrypoint(ctx: JobContext):
     global _room_ref, _session_ref
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    logger.info("Entrypoint starting...")
+    try:
+        await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    except Exception as e:
+        logger.error(f"Failed to connect: {e}")
+        return
     _room_ref = ctx.room
+    logger.info(f"Connected to room: {ctx.room.name}, metadata: {ctx.room.metadata}")
 
     employee_id = DEFAULT_EMPLOYEE_ID
     if ctx.room.metadata:
