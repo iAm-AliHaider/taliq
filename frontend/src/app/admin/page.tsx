@@ -74,6 +74,10 @@ export default function AdminPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [grievances, setGrievances] = useState<Grievance[]>([]);
+  const [policies, setPolicies] = useState<Record<string, any>>({});
+  const [editingPolicy, setEditingPolicy] = useState<string | null>(null);
+  const [policyDraft, setPolicyDraft] = useState<Record<string, any>>({});
+  const [savingPolicy, setSavingPolicy] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [search, setSearch] = useState("");
   const [editingManager, setEditingManager] = useState<string | null>(null);
@@ -99,6 +103,7 @@ export default function AdminPage() {
       adminFetch("section=documents").then(d => d && setDocuments(d));
       adminFetch("section=announcements").then(d => d && setAnnouncements(d));
       adminFetch("section=grievances").then(d => d && setGrievances(d));
+      adminFetch("section=policies").then(d => d && setPolicies(d));
     }
   }, [authed]);
 
@@ -120,6 +125,19 @@ export default function AdminPage() {
       body: JSON.stringify({ employeeId: empId, newManagerId: newMgrId }),
     });
     setEditingManager(null);
+    loadData();
+  };
+
+  const handleSavePolicy = async (category: string) => {
+    setSavingPolicy(true);
+    const { _id, _updated_at, _updated_by, ...config } = policyDraft;
+    await adminFetch("?action=policy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, config }),
+    });
+    setEditingPolicy(null);
+    setSavingPolicy(false);
     loadData();
   };
 
@@ -422,62 +440,117 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* POLICIES */}
+        {/* POLICIES - Editable */}
         {tab === "Policies" && (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Leave Policy</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-blue-50 rounded-xl p-3 text-center"><p className="text-xs text-blue-400">Annual</p><p className="text-2xl font-bold text-blue-700">30</p><p className="text-[10px] text-blue-400">days/year</p></div>
-                <div className="bg-red-50 rounded-xl p-3 text-center"><p className="text-xs text-red-400">Sick</p><p className="text-2xl font-bold text-red-700">30</p><p className="text-[10px] text-red-400">days/year</p></div>
-                <div className="bg-orange-50 rounded-xl p-3 text-center"><p className="text-xs text-orange-400">Emergency</p><p className="text-2xl font-bold text-orange-700">5</p><p className="text-[10px] text-orange-400">days/year</p></div>
-                <div className="bg-purple-50 rounded-xl p-3 text-center"><p className="text-xs text-purple-400">Study</p><p className="text-2xl font-bold text-purple-700">15</p><p className="text-[10px] text-purple-400">days/year</p></div>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                <div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400">Max Carry Over:</span> <span className="font-medium">5 days</span></div>
-                <div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400">Min Notice:</span> <span className="font-medium">3 days</span></div>
-                <div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400">Approval:</span> <span className="font-medium text-emerald-600">Required</span></div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Loan Policy</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Max Amount</span><span className="font-bold text-gray-900 text-lg">2x</span><span className="text-gray-400 block">basic salary</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Max EMI</span><span className="font-bold text-gray-900 text-lg">33%</span><span className="text-gray-400 block">of basic</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Min Service</span><span className="font-bold text-gray-900 text-lg">1 yr</span><span className="text-gray-400 block">minimum</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Approval</span><span className="font-bold text-emerald-600 text-lg">Yes</span><span className="text-gray-400 block">manager + HR</span></div>
-              </div>
-              <div className="mt-3"><span className="text-xs text-gray-400">Types:</span> <div className="flex gap-1 mt-1"><Badge text="Interest-Free" color="emerald" /><Badge text="Advance Salary" color="blue" /><Badge text="Personal" color="violet" /><Badge text="Emergency" color="red" /></div></div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Attendance Policy</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Work Start</span><span className="font-bold text-gray-900 text-lg">08:00</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Work End</span><span className="font-bold text-gray-900 text-lg">17:00</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Late After</span><span className="font-bold text-amber-600 text-lg">08:30</span></div>
-                <div className="bg-gray-50 rounded-lg p-3"><span className="text-gray-400 block">Max OT</span><span className="font-bold text-gray-900 text-lg">4h/day</span></div>
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Travel Per Diem (SAR/day)</h3>
-              <table className="w-full text-xs">
-                <thead><tr className="border-b border-gray-100"><th className="text-left py-2 text-gray-400">Grade</th><th className="text-right py-2 text-gray-400">International</th><th className="text-right py-2 text-gray-400">Local</th></tr></thead>
-                <tbody>
-                  <tr className="border-b border-gray-50"><td className="py-2 font-medium">Chairman (G40+)</td><td className="py-2 text-right font-bold">3,500</td><td className="py-2 text-right font-bold">2,000</td></tr>
-                  <tr className="border-b border-gray-50"><td className="py-2 font-medium">C-Level (G38-39)</td><td className="py-2 text-right font-bold">1,750</td><td className="py-2 text-right font-bold">1,200</td></tr>
-                  <tr><td className="py-2 font-medium">Others</td><td className="py-2 text-right font-bold">1,350</td><td className="py-2 text-right font-bold">900</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Grievance SLA (Hours)</h3>
-              <div className="grid grid-cols-4 gap-2">
-                <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-[10px] text-gray-400">Low</p><p className="text-lg font-bold text-gray-700">168h</p><p className="text-[10px] text-gray-400">7 days</p></div>
-                <div className="bg-amber-50 rounded-lg p-3 text-center"><p className="text-[10px] text-amber-400">Medium</p><p className="text-lg font-bold text-amber-700">72h</p><p className="text-[10px] text-amber-400">3 days</p></div>
-                <div className="bg-orange-50 rounded-lg p-3 text-center"><p className="text-[10px] text-orange-400">High</p><p className="text-lg font-bold text-orange-700">24h</p><p className="text-[10px] text-orange-400">1 day</p></div>
-                <div className="bg-red-50 rounded-lg p-3 text-center"><p className="text-[10px] text-red-400">Critical</p><p className="text-lg font-bold text-red-700">4h</p><p className="text-[10px] text-red-400">urgent</p></div>
-              </div>
-            </div>
+            {Object.entries(policies).map(([category, config]) => {
+              const isEditing = editingPolicy === category;
+              const draft = isEditing ? policyDraft : config;
+              const { _id, _updated_at, _updated_by, ...fields } = draft;
+              const LABELS: Record<string, string> = {
+                leave: "Leave Policy", loan: "Loan Policy", attendance: "Attendance Policy",
+                travel: "Travel & Per Diem", grievance: "Grievance & SLA",
+              };
+              const COLORS: Record<string, string> = {
+                leave: "from-blue-50 to-indigo-50", loan: "from-emerald-50 to-teal-50",
+                attendance: "from-amber-50 to-orange-50", travel: "from-sky-50 to-cyan-50",
+                grievance: "from-red-50 to-pink-50",
+              };
+              return (
+                <div key={category} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className={`px-5 py-3 bg-gradient-to-r ${COLORS[category] || "from-gray-50 to-gray-100"} border-b flex items-center justify-between`}>
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-800">{LABELS[category] || category}</h3>
+                      {config._updated_at && <p className="text-[10px] text-gray-400">Last updated: {new Date(config._updated_at).toLocaleDateString()}</p>}
+                    </div>
+                    {!isEditing ? (
+                      <button onClick={() => { setEditingPolicy(category); setPolicyDraft({ ...config }); }}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 shadow-sm">
+                        Edit
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleSavePolicy(category)} disabled={savingPolicy}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 disabled:opacity-50">
+                          {savingPolicy ? "Saving..." : "Save"}
+                        </button>
+                        <button onClick={() => setEditingPolicy(null)}
+                          className="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-300">Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {Object.entries(fields).map(([key, value]) => {
+                        const label = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                        if (typeof value === "object" && !Array.isArray(value)) {
+                          return (
+                            <div key={key} className="col-span-2 md:col-span-3 lg:col-span-4">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">{label}</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {Object.entries(value as Record<string, any>).map(([sk, sv]) => (
+                                  <div key={sk} className="bg-gray-50 rounded-lg p-2">
+                                    <span className="text-[10px] text-gray-400 block capitalize">{sk.replace(/_/g, " ")}</span>
+                                    {isEditing ? (
+                                      <input type="number" value={sv} onChange={e => {
+                                        const newDraft = { ...policyDraft };
+                                        (newDraft[key] as any)[sk] = Number(e.target.value);
+                                        setPolicyDraft(newDraft);
+                                      }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
+                                    ) : (
+                                      <span className="text-sm font-bold text-gray-900">{sv}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (Array.isArray(value)) {
+                          return (
+                            <div key={key} className="col-span-2 md:col-span-3 lg:col-span-4">
+                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">{label}</p>
+                              <div className="flex flex-wrap gap-1">
+                                {(value as string[]).map((v, i) => (
+                                  <span key={i} className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-700 border border-gray-200">{v}</span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (typeof value === "boolean") {
+                          return (
+                            <div key={key} className="bg-gray-50 rounded-xl p-3">
+                              <p className="text-[10px] text-gray-400">{label}</p>
+                              {isEditing ? (
+                                <button onClick={() => setPolicyDraft({ ...policyDraft, [key]: !policyDraft[key] })}
+                                  className={`mt-1 px-3 py-1 rounded-lg text-xs font-bold ${policyDraft[key] ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                  {policyDraft[key] ? "Yes" : "No"}
+                                </button>
+                              ) : (
+                                <p className={`text-lg font-bold ${value ? "text-emerald-600" : "text-red-600"}`}>{value ? "Yes" : "No"}</p>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={key} className="bg-gray-50 rounded-xl p-3">
+                            <p className="text-[10px] text-gray-400">{label}</p>
+                            {isEditing ? (
+                              <input type={typeof value === "number" ? "number" : "text"} value={policyDraft[key]}
+                                onChange={e => setPolicyDraft({ ...policyDraft, [key]: typeof value === "number" ? Number(e.target.value) : e.target.value })}
+                                className="w-full text-lg font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
+                            ) : (
+                              <p className="text-lg font-bold text-gray-900">{String(value)}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

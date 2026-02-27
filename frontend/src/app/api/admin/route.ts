@@ -92,6 +92,15 @@ export async function GET(request: NextRequest) {
       })));
     }
 
+    if (section === "policies") {
+      const rows = await sql`SELECT * FROM policies ORDER BY category`;
+      const result: Record<string, any> = {};
+      for (const r of rows) {
+        result[r.category] = { ...r.config, _id: r.id, _updated_at: r.updated_at, _updated_by: r.updated_by };
+      }
+      return NextResponse.json(result);
+    }
+
     return NextResponse.json([]);
   } catch (e: any) {
     console.error("Admin API error:", e.message);
@@ -122,6 +131,18 @@ export async function POST(request: NextRequest) {
     if (action === "reassign") {
       const { employeeId, newManagerId } = body;
       await sql`UPDATE employees SET manager_id = ${newManagerId} WHERE id = ${employeeId}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "policy") {
+      const { category, config } = body;
+      await sql`UPDATE policies SET config = ${JSON.stringify(config)}::jsonb, updated_at = NOW(), updated_by = 'admin' WHERE category = ${category}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_policy") {
+      const { category, config } = body;
+      await sql`INSERT INTO policies (category, config, updated_by) VALUES (${category}, ${JSON.stringify(config)}::jsonb, 'admin') ON CONFLICT (category) DO UPDATE SET config = ${JSON.stringify(config)}::jsonb, updated_at = NOW()`;
       return NextResponse.json({ ok: true });
     }
 
