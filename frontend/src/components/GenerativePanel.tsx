@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { ComponentItem, TaliqActions } from "./TaliqProvider";
 import { LeaveBalanceCard } from "./taliq/LeaveBalanceCard";
 import { LeaveRequestForm } from "./taliq/LeaveRequestForm";
@@ -18,6 +18,8 @@ import { DocumentRequestForm } from "./taliq/DocumentRequestForm";
 import { AnnouncementCard } from "./taliq/AnnouncementCard";
 import { TravelRequestCard } from "./taliq/TravelRequestCard";
 import { TravelRequestForm } from "./taliq/TravelRequestForm";
+import { ManagerDashboard } from "./taliq/ManagerDashboard";
+import { TeamOverviewCard } from "./taliq/TeamOverviewCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -36,6 +38,8 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   AnnouncementCard,
   TravelRequestCard,
   TravelRequestForm,
+  ManagerDashboard,
+  TeamOverviewCard,
 };
 
 interface Props {

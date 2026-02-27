@@ -4,7 +4,16 @@ import { useState, useEffect } from "react";
 import { TaliqProvider } from "@/components/TaliqProvider";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { GenerativePanel } from "@/components/GenerativePanel";
+import { LoginPage } from "@/components/LoginPage";
 import { fetchToken } from "@/lib/livekit-config";
+
+interface AuthEmployee {
+  id: string;
+  name: string;
+  position: string;
+  department: string;
+  isManager: boolean;
+}
 
 function AuroraBackground() {
   return (
@@ -18,16 +27,34 @@ function AuroraBackground() {
 }
 
 export default function Home() {
+  const [employee, setEmployee] = useState<AuthEmployee | null>(null);
   const [token, setToken] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [roomName] = useState(() => `taliq-${Date.now()}`);
+  const [authChecked, setAuthChecked] = useState(false);
 
+  // Check localStorage for existing session
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem("taliq_employee");
+      if (stored) {
+        setEmployee(JSON.parse(stored));
+      }
+    } catch { /* ignore */ }
+    setAuthChecked(true);
+  }, []);
+
+  // Fetch token once employee is set
+  useEffect(() => {
+    if (!employee) return;
+
     async function getToken() {
+      setIsLoading(true);
+      setError("");
       try {
-        const identity = `emp-${Date.now()}`;
-        const { token: t } = await fetchToken(roomName, identity);
+        const identity = `${employee!.id}-${Date.now()}`;
+        const { token: t } = await fetchToken(roomName, identity, employee!.id);
         setToken(t);
       } catch {
         setError("Failed to connect to Taliq");
@@ -36,9 +63,35 @@ export default function Home() {
       }
     }
     getToken();
-  }, [roomName]);
+  }, [employee, roomName]);
 
-  if (isLoading) {
+  const handleLogin = (emp: AuthEmployee) => {
+    localStorage.setItem("taliq_employee", JSON.stringify(emp));
+    setEmployee(emp);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("taliq_employee");
+    setEmployee(null);
+    setToken("");
+  };
+
+  // Still checking auth
+  if (!authChecked) {
+    return (
+      <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // Not logged in — show login
+  if (!employee) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  // Loading token
+  if (isLoading || !token) {
     return (
       <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center relative overflow-hidden">
         <AuroraBackground />
@@ -51,7 +104,10 @@ export default function Home() {
               <span className="text-2xl font-bold text-emerald-600">ت</span>
             </div>
           </div>
-          <p className="text-gray-500 text-sm font-medium">Connecting to Taliq...</p>
+          <div className="text-center">
+            <p className="text-gray-500 text-sm font-medium">Welcome, {employee.name.split(" ")[0]}</p>
+            <p className="text-gray-400 text-xs mt-1">Connecting to Taliq...</p>
+          </div>
         </div>
       </div>
     );
@@ -62,7 +118,11 @@ export default function Home() {
       <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center p-4 relative">
         <AuroraBackground />
         <div className="card flex flex-col items-center gap-4 p-8 max-w-sm w-full z-10">
-          <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center"><span className="text-2xl">⚠️</span></div>
+          <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center">
+            <svg className="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
           <p className="text-red-600 text-center text-sm">{error}</p>
           <button onClick={() => window.location.reload()} className="px-5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium hover:bg-emerald-100 transition-all">Try Again</button>
         </div>
@@ -86,10 +146,29 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-base font-bold text-gray-900 leading-tight">Taliq</h1>
-              <p className="text-[9px] text-gray-400 tracking-widest uppercase">Voice-First HR</p>
+              <p className="text-[9px] text-gray-400 tracking-widest uppercase">{employee.name}</p>
             </div>
           </div>
-          <span className="text-xs text-gray-400 font-arabic rtl">تَلِيق</span>
+
+          <div className="flex items-center gap-2">
+            {/* Manager badge */}
+            {employee.isManager && (
+              <span className="px-2 py-1 rounded-lg bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
+                Manager
+              </span>
+            )}
+
+            {/* Logout */}
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+              title="Sign out"
+            >
+              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 

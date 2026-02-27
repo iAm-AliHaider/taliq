@@ -3,7 +3,7 @@ import { AccessToken, RoomServiceClient, AgentDispatchClient } from "livekit-ser
 
 export async function POST(request: NextRequest) {
   try {
-    const { roomName, participantName } = await request.json();
+    const { roomName, participantName, employeeId } = await request.json();
     if (!roomName || !participantName) {
       return NextResponse.json({ error: "roomName and participantName required" }, { status: 400 });
     }
@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     const at = new AccessToken(apiKey, apiSecret, {
       identity: participantName,
       name: participantName,
+      metadata: JSON.stringify({ employee_id: employeeId || "" }),
     });
     at.addGrant({
       room: roomName,
@@ -32,7 +33,12 @@ export async function POST(request: NextRequest) {
     const httpUrl = livekitUrl.replace("wss://", "https://");
     const roomService = new RoomServiceClient(httpUrl, apiKey, apiSecret);
     try {
-      await roomService.createRoom({ name: roomName, emptyTimeout: 300, maxParticipants: 5 });
+      await roomService.createRoom({ 
+        name: roomName, 
+        emptyTimeout: 300, 
+        maxParticipants: 5,
+        metadata: JSON.stringify({ employee_id: employeeId || "" }),
+      });
     } catch (e) {
       console.log("Room create:", e instanceof Error ? e.message : "ok");
     }

@@ -8,9 +8,16 @@ from datetime import date as dt
 from dotenv import load_dotenv
 
 from livekit.agents import (
-    Agent, AgentSession, AutoSubscribe, JobContext,
-    JobExecutorType, WorkerOptions, WorkerType,
-    cli, function_tool, RunContext,
+    Agent,
+    AgentSession,
+    AutoSubscribe,
+    JobContext,
+    JobExecutorType,
+    WorkerOptions,
+    WorkerType,
+    cli,
+    function_tool,
+    RunContext,
 )
 from livekit.plugins import deepgram, openai, silero
 from livekit import rtc
@@ -21,9 +28,23 @@ load_dotenv()
 logger = logging.getLogger("taliq-agent")
 logging.basicConfig(level=logging.INFO)
 
-CURRENT_EMPLOYEE_ID = os.getenv("TALIQ_EMPLOYEE_ID", "E001")
+DEFAULT_EMPLOYEE_ID = os.getenv("TALIQ_EMPLOYEE_ID", "E001")
 _room_ref = None
 _session_ref = None
+_current_employee_id = None
+
+
+def get_current_employee_id_from_context() -> str:
+    global _current_employee_id
+    if _current_employee_id:
+        return _current_employee_id
+    return DEFAULT_EMPLOYEE_ID
+
+
+def set_current_employee_id(emp_id: str):
+    global _current_employee_id
+    _current_employee_id = emp_id
+
 
 SYSTEM_PROMPT = """You are Taliq, a voice-first HR assistant for Saudi Arabian employees.
 
@@ -52,8 +73,17 @@ async def _send_ui(component: str, props: dict, category: str | None = None):
     if not _room_ref or not _room_ref.local_participant:
         return
     try:
-        payload = json.dumps({"type": "tambo_render", "component": component, "props": props, "category": category or component}).encode("utf-8")
-        await _room_ref.local_participant.publish_data(payload, topic="ui_sync", reliable=True)
+        payload = json.dumps(
+            {
+                "type": "tambo_render",
+                "component": component,
+                "props": props,
+                "category": category or component,
+            }
+        ).encode("utf-8")
+        await _room_ref.local_participant.publish_data(
+            payload, topic="ui_sync", reliable=True
+        )
         logger.info(f"UI: {component}")
     except Exception as e:
         logger.error(f"UI error: {e}")
@@ -61,45 +91,61 @@ async def _send_ui(component: str, props: dict, category: str | None = None):
 
 # ---- INTERACTIVE FORMS ----
 
+
 @function_tool()
 async def show_leave_form(context: RunContext):
     """Show interactive leave application form with dropdowns, date pickers, and submit button. Call when user wants to APPLY for leave."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
     bal = emp["leave_balance"]
-    await _send_ui("LeaveRequestForm", {
-        "employeeName": emp["name"],
-        "balance": bal.get("annual", 0),
-        "status": "preview",
-        "mode": "form",
-    }, "main_card")
+    await _send_ui(
+        "LeaveRequestForm",
+        {
+            "employeeName": emp["name"],
+            "balance": bal.get("annual", 0),
+            "status": "preview",
+            "mode": "form",
+        },
+        "main_card",
+    )
     return "Leave form shown. User can fill in type, dates, and reason, then submit."
 
 
 @function_tool()
 async def show_document_form(context: RunContext):
     """Show interactive document request form. Call when user wants to request a document."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
-    await _send_ui("DocumentRequestForm", {
-        "employeeName": emp["name"],
-    }, "main_card")
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
+    await _send_ui(
+        "DocumentRequestForm",
+        {
+            "employeeName": emp["name"],
+        },
+        "main_card",
+    )
     return "Document request form shown. User can select type and submit."
 
 
 @function_tool()
 async def show_loan_form(context: RunContext):
     """Show interactive loan application form with amount slider. Call when user wants to apply for a loan."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
-    elig = db.check_loan_eligibility(CURRENT_EMPLOYEE_ID)
-    await _send_ui("LoanApplicationForm", {
-        "employeeName": emp["name"],
-        "eligible": elig.get("eligible", False),
-        "maxAmount": elig.get("max_amount", 0),
-        "currency": "SAR",
-        "basicSalary": emp["salary"]["basic"],
-    }, "main_card")
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
+    elig = db.check_loan_eligibility(get_current_employee_id_from_context())
+    await _send_ui(
+        "LoanApplicationForm",
+        {
+            "employeeName": emp["name"],
+            "eligible": elig.get("eligible", False),
+            "maxAmount": elig.get("max_amount", 0),
+            "currency": "SAR",
+            "basicSalary": emp["salary"]["basic"],
+        },
+        "main_card",
+    )
     if elig.get("eligible"):
         return f"Loan form shown. Max eligible: {elig['max_amount']:,} SAR."
     return "Not eligible for a loan at this time."
@@ -108,68 +154,101 @@ async def show_loan_form(context: RunContext):
 @function_tool()
 async def show_travel_form(context: RunContext):
     """Show interactive travel request form with destination picker. Call when user wants to request travel."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
     per_diem = db.get_per_diem(emp.get("grade", "34"))
-    await _send_ui("TravelRequestForm", {
-        "employeeName": emp["name"],
-        "grade": emp.get("grade", ""),
-        "perDiemRates": {"international": per_diem, "local": int(per_diem * 0.67)},
-        "currency": "SAR",
-    }, "main_card")
+    await _send_ui(
+        "TravelRequestForm",
+        {
+            "employeeName": emp["name"],
+            "grade": emp.get("grade", ""),
+            "perDiemRates": {"international": per_diem, "local": int(per_diem * 0.67)},
+            "currency": "SAR",
+        },
+        "main_card",
+    )
     return "Travel form shown. User can pick destination, dates, and submit."
 
 
 @function_tool()
 async def show_profile_edit(context: RunContext):
     """Show profile with editable fields (phone, email, emergency contact, IBAN). Call when user wants to edit profile."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
     mgr = db.get_employee(emp.get("manager_id", ""))
-    await _send_ui("ProfileEditCard", {
-        "name": emp["name"], "nameAr": emp["name_ar"],
-        "position": emp["position"], "department": emp["department"],
-        "email": emp["email"], "phone": emp["phone"],
-        "joinDate": emp["join_date"], "employeeId": emp["id"],
-        "grade": f"Grade {emp['grade']} / Level {emp['level']}",
-        "manager": mgr["name"] if mgr else "N/A",
-        "nationality": emp.get("nationality", ""),
-        "maritalStatus": emp.get("marital_status", ""),
-        "emergencyContact": emp.get("emergency_contact", ""),
-        "emergencyPhone": emp.get("emergency_phone", ""),
-        "bankIban": emp.get("bank_iban", ""),
-    }, "main_card")
+    await _send_ui(
+        "ProfileEditCard",
+        {
+            "name": emp["name"],
+            "nameAr": emp["name_ar"],
+            "position": emp["position"],
+            "department": emp["department"],
+            "email": emp["email"],
+            "phone": emp["phone"],
+            "joinDate": emp["join_date"],
+            "employeeId": emp["id"],
+            "grade": f"Grade {emp['grade']} / Level {emp['level']}",
+            "manager": mgr["name"] if mgr else "N/A",
+            "nationality": emp.get("nationality", ""),
+            "maritalStatus": emp.get("marital_status", ""),
+            "emergencyContact": emp.get("emergency_contact", ""),
+            "emergencyPhone": emp.get("emergency_phone", ""),
+            "bankIban": emp.get("bank_iban", ""),
+        },
+        "main_card",
+    )
     return "Profile shown with edit mode. User can update phone, email, emergency contact, and IBAN."
 
 
 # ---- READ OPERATIONS ----
 
+
 @function_tool()
 async def check_leave_balance(context: RunContext):
     """Show leave balance overview."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
     bal = emp["leave_balance"]
-    await _send_ui("LeaveBalanceCard", {
-        "employeeName": emp["name"], "annual": bal["annual"],
-        "sick": bal["sick"], "emergency": bal["emergency"], "study": bal.get("study"),
-    }, "main_card")
+    await _send_ui(
+        "LeaveBalanceCard",
+        {
+            "employeeName": emp["name"],
+            "annual": bal["annual"],
+            "sick": bal["sick"],
+            "emergency": bal["emergency"],
+            "study": bal.get("study"),
+        },
+        "main_card",
+    )
     return f"{bal['annual']} annual, {bal['sick']} sick, {bal['emergency']} emergency days."
 
 
 @function_tool()
 async def show_my_leave_requests(context: RunContext):
     """Show all my leave requests."""
-    reqs = db.get_leave_requests(CURRENT_EMPLOYEE_ID)
-    if not reqs: return "No leave requests."
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
+    reqs = db.get_leave_requests(get_current_employee_id_from_context())
+    if not reqs:
+        return "No leave requests."
+    emp = db.get_employee(get_current_employee_id_from_context())
     lr = reqs[0]
-    await _send_ui("LeaveRequestForm", {
-        "employeeName": emp["name"] if emp else "", "leaveType": lr["leave_type"],
-        "startDate": lr["start_date"], "endDate": lr["end_date"],
-        "days": lr["days"], "reason": lr["reason"] or "",
-        "status": lr["status"], "reference": lr["ref"], "mode": "display",
-    }, "main_card")
+    await _send_ui(
+        "LeaveRequestForm",
+        {
+            "employeeName": emp["name"] if emp else "",
+            "leaveType": lr["leave_type"],
+            "startDate": lr["start_date"],
+            "endDate": lr["end_date"],
+            "days": lr["days"],
+            "reason": lr["reason"] or "",
+            "status": lr["status"],
+            "reference": lr["ref"],
+            "mode": "display",
+        },
+        "main_card",
+    )
     summary = ", ".join(f"{r['ref']}({r['status']})" for r in reqs[:5])
     return f"{len(reqs)} request(s): {summary}"
 
@@ -177,71 +256,116 @@ async def show_my_leave_requests(context: RunContext):
 @function_tool()
 async def show_pending_approvals(context: RunContext):
     """Show pending approvals for me as manager."""
-    approvals = db.get_pending_approvals(CURRENT_EMPLOYEE_ID)
-    items = [{"id": a["ref"], "employeeName": a["employee_name"], "type": a["leave_type"],
-              "startDate": a["start_date"], "endDate": a["end_date"], "days": a["days"],
-              "reason": a["reason"] or "", "status": a["status"]} for a in approvals]
+    approvals = db.get_pending_approvals(get_current_employee_id_from_context())
+    items = [
+        {
+            "id": a["ref"],
+            "employeeName": a["employee_name"],
+            "type": a["leave_type"],
+            "startDate": a["start_date"],
+            "endDate": a["end_date"],
+            "days": a["days"],
+            "reason": a["reason"] or "",
+            "status": a["status"],
+        }
+        for a in approvals
+    ]
     await _send_ui("ApprovalQueue", {"items": items}, "main_card")
     return f"{len(items)} pending."
 
 
 @function_tool()
-async def approve_leave(context: RunContext, request_ref: str, decision: str = "approved"):
+async def approve_leave(
+    context: RunContext, request_ref: str, decision: str = "approved"
+):
     """Approve or reject a leave request."""
     result = db.approve_leave_request(request_ref, decision)
-    if not result: return f"Request {request_ref} not found."
-    await _send_ui("StatusBanner", {
-        "message": f"{request_ref} for {result.get('employee_name', '?')}: {decision}",
-        "type": "success" if decision == "approved" else "warning",
-    }, "main_card")
+    if not result:
+        return f"Request {request_ref} not found."
+    await _send_ui(
+        "StatusBanner",
+        {
+            "message": f"{request_ref} for {result.get('employee_name', '?')}: {decision}",
+            "type": "success" if decision == "approved" else "warning",
+        },
+        "main_card",
+    )
     return f"Leave {request_ref} {decision}."
 
 
 @function_tool()
 async def show_my_profile(context: RunContext):
     """Show employee profile (read-only view)."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
     mgr = db.get_employee(emp.get("manager_id", ""))
-    await _send_ui("EmployeeProfileCard", {
-        "name": emp["name"], "nameAr": emp["name_ar"],
-        "position": emp["position"], "department": emp["department"],
-        "email": emp["email"], "phone": emp["phone"],
-        "joinDate": emp["join_date"], "employeeId": emp["id"],
-        "grade": f"Grade {emp['grade']} / Level {emp['level']}",
-        "manager": mgr["name"] if mgr else "N/A",
-    }, "main_card")
+    await _send_ui(
+        "EmployeeProfileCard",
+        {
+            "name": emp["name"],
+            "nameAr": emp["name_ar"],
+            "position": emp["position"],
+            "department": emp["department"],
+            "email": emp["email"],
+            "phone": emp["phone"],
+            "joinDate": emp["join_date"],
+            "employeeId": emp["id"],
+            "grade": f"Grade {emp['grade']} / Level {emp['level']}",
+            "manager": mgr["name"] if mgr else "N/A",
+        },
+        "main_card",
+    )
     return f"{emp['name']}, {emp['position']}."
 
 
 @function_tool()
 async def show_pay_slip(context: RunContext, month: str = "February 2026"):
     """Show pay slip."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
     sal = emp["salary"]
     gosi = int(sal["basic"] * 0.0975)
     net = sal["total"] - gosi
-    await _send_ui("PaySlipCard", {
-        "employeeName": emp["name"], "month": month,
-        "basic": sal["basic"], "housing": sal["housing"], "transport": sal["transport"],
-        "deductions": gosi, "gosiDeduction": gosi, "netPay": net, "currency": "SAR",
-    }, "main_card")
+    await _send_ui(
+        "PaySlipCard",
+        {
+            "employeeName": emp["name"],
+            "month": month,
+            "basic": sal["basic"],
+            "housing": sal["housing"],
+            "transport": sal["transport"],
+            "deductions": gosi,
+            "gosiDeduction": gosi,
+            "netPay": net,
+            "currency": "SAR",
+        },
+        "main_card",
+    )
     return f"Net: {net:,} SAR after {gosi:,} GOSI."
 
 
 @function_tool()
 async def check_loan_eligibility(context: RunContext):
     """Check loan eligibility."""
-    result = db.check_loan_eligibility(CURRENT_EMPLOYEE_ID)
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    await _send_ui("LoanCard", {
-        "employeeName": emp["name"], "loanType": "Eligibility",
-        "amount": 0, "currency": "SAR",
-        "eligible": result["eligible"], "maxAmount": result.get("max_amount"),
-        "status": "eligible" if result["eligible"] else "ineligible",
-    }, "main_card")
+    result = db.check_loan_eligibility(get_current_employee_id_from_context())
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    await _send_ui(
+        "LoanCard",
+        {
+            "employeeName": emp["name"],
+            "loanType": "Eligibility",
+            "amount": 0,
+            "currency": "SAR",
+            "eligible": result["eligible"],
+            "maxAmount": result.get("max_amount"),
+            "status": "eligible" if result["eligible"] else "ineligible",
+        },
+        "main_card",
+    )
     if result["eligible"]:
         return f"Eligible! Max: {result['max_amount']:,} SAR."
     return f"Not eligible: {result['reason']}"
@@ -250,35 +374,56 @@ async def check_loan_eligibility(context: RunContext):
 @function_tool()
 async def show_loan_balance(context: RunContext):
     """Show active loans."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    loans = db.get_employee_loans(CURRENT_EMPLOYEE_ID)
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    loans = db.get_employee_loans(get_current_employee_id_from_context())
     if not loans:
-        await _send_ui("StatusBanner", {"message": "No active loans.", "type": "info"}, "main_card")
+        await _send_ui(
+            "StatusBanner", {"message": "No active loans.", "type": "info"}, "main_card"
+        )
         return "No active loans."
     loan = loans[0]
-    await _send_ui("LoanCard", {
-        "employeeName": emp["name"], "loanType": loan["loan_type"],
-        "amount": loan["amount"], "currency": "SAR",
-        "remainingBalance": loan["remaining"], "monthlyInstallment": loan["monthly_installment"],
-        "installmentsLeft": loan["installments_left"], "status": "active",
-    }, "main_card")
-    return f"{len(loans)} loan(s), {sum(l['remaining'] for l in loans):,} SAR remaining."
+    await _send_ui(
+        "LoanCard",
+        {
+            "employeeName": emp["name"],
+            "loanType": loan["loan_type"],
+            "amount": loan["amount"],
+            "currency": "SAR",
+            "remainingBalance": loan["remaining"],
+            "monthlyInstallment": loan["monthly_installment"],
+            "installmentsLeft": loan["installments_left"],
+            "status": "active",
+        },
+        "main_card",
+    )
+    return (
+        f"{len(loans)} loan(s), {sum(l['remaining'] for l in loans):,} SAR remaining."
+    )
 
 
 @function_tool()
 async def show_my_documents(context: RunContext):
     """Show my document requests."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    docs = db.get_document_requests(CURRENT_EMPLOYEE_ID)
-    if not docs: return "No requests."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    docs = db.get_document_requests(get_current_employee_id_from_context())
+    if not docs:
+        return "No requests."
     doc = docs[0]
-    await _send_ui("DocumentRequestCard", {
-        "employeeName": emp["name"], "documentType": doc["document_type"],
-        "requestDate": doc["created_at"][:10], "status": doc["status"],
-        "referenceNumber": doc["ref"],
-    }, "main_card")
+    await _send_ui(
+        "DocumentRequestCard",
+        {
+            "employeeName": emp["name"],
+            "documentType": doc["document_type"],
+            "requestDate": doc["created_at"][:10],
+            "status": doc["status"],
+            "referenceNumber": doc["ref"],
+        },
+        "main_card",
+    )
     return f"{len(docs)} request(s). Latest: {doc['document_type']} - {doc['status']}."
 
 
@@ -286,27 +431,43 @@ async def show_my_documents(context: RunContext):
 async def show_announcements(context: RunContext):
     """Show announcements."""
     anns = db.get_announcements()
-    if not anns: return "None."
+    if not anns:
+        return "None."
     a = anns[0]
-    await _send_ui("AnnouncementCard", {
-        "title": a["title"], "content": a["content"],
-        "author": a.get("author"), "date": a["created_at"][:10],
-        "priority": a.get("priority", "normal"),
-        "acknowledgedCount": a.get("acknowledged_count"), "totalCount": a.get("total_count"),
-    }, "main_card")
+    await _send_ui(
+        "AnnouncementCard",
+        {
+            "title": a["title"],
+            "content": a["content"],
+            "author": a.get("author"),
+            "date": a["created_at"][:10],
+            "priority": a.get("priority", "normal"),
+            "acknowledgedCount": a.get("acknowledged_count"),
+            "totalCount": a.get("total_count"),
+        },
+        "main_card",
+    )
     return f"Latest: {a['title']}."
 
 
 @function_tool()
 async def show_team_attendance(context: RunContext):
     """Show team attendance."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    att = db.get_team_attendance(CURRENT_EMPLOYEE_ID)
-    if not att: return "No team."
-    await _send_ui("AttendanceDashboard", {
-        "managerName": emp["name"], "date": str(dt.today()), "team": att,
-    }, "main_card")
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    att = db.get_team_attendance(get_current_employee_id_from_context())
+    if not att:
+        return "No team."
+    await _send_ui(
+        "AttendanceDashboard",
+        {
+            "managerName": emp["name"],
+            "date": str(dt.today()),
+            "team": att,
+        },
+        "main_card",
+    )
     p = sum(1 for a in att if a["status"] in ("present", "remote"))
     return f"{p}/{len(att)} present."
 
@@ -314,106 +475,282 @@ async def show_team_attendance(context: RunContext):
 @function_tool()
 async def show_status(context: RunContext, message: str, status_type: str = "info"):
     """Show notification."""
-    await _send_ui("StatusBanner", {"message": message, "type": status_type}, "main_card")
+    await _send_ui(
+        "StatusBanner", {"message": message, "type": status_type}, "main_card"
+    )
     return message
 
 
 # ---- CRUD (called by form submissions or voice) ----
 
+
 @function_tool()
-async def apply_for_leave(context: RunContext, leave_type: str, start_date: str, end_date: str, days: int, reason: str):
+async def apply_for_leave(
+    context: RunContext,
+    leave_type: str,
+    start_date: str,
+    end_date: str,
+    days: int,
+    reason: str,
+):
     """CREATE a leave request in the database."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Employee not found."
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Employee not found."
     bal = emp["leave_balance"].get(leave_type, 0)
     if days > bal:
-        await _send_ui("StatusBanner", {"message": f"Insufficient {leave_type} leave ({bal} left).", "type": "error"}, "main_card")
+        await _send_ui(
+            "StatusBanner",
+            {
+                "message": f"Insufficient {leave_type} leave ({bal} left).",
+                "type": "error",
+            },
+            "main_card",
+        )
         return f"Only {bal} {leave_type} days remaining."
-    lr = db.submit_leave_request(CURRENT_EMPLOYEE_ID, leave_type, start_date, end_date, days, reason)
-    await _send_ui("LeaveRequestForm", {
-        "employeeName": emp["name"], "leaveType": leave_type,
-        "startDate": start_date, "endDate": end_date,
-        "days": days, "reason": reason, "balance": bal - days,
-        "status": "submitted", "reference": lr["ref"], "mode": "display",
-    }, "main_card")
+    lr = db.submit_leave_request(
+        get_current_employee_id_from_context(), leave_type, start_date, end_date, days, reason
+    )
+    await _send_ui(
+        "LeaveRequestForm",
+        {
+            "employeeName": emp["name"],
+            "leaveType": leave_type,
+            "startDate": start_date,
+            "endDate": end_date,
+            "days": days,
+            "reason": reason,
+            "balance": bal - days,
+            "status": "submitted",
+            "reference": lr["ref"],
+            "mode": "display",
+        },
+        "main_card",
+    )
     return f"Leave {lr['ref']} created! {days} {leave_type} days. Sent to manager."
 
 
 @function_tool()
-async def apply_for_loan(context: RunContext, loan_type: str, amount: float, months: int):
+async def apply_for_loan(
+    context: RunContext, loan_type: str, amount: float, months: int
+):
     """CREATE a loan application."""
-    elig = db.check_loan_eligibility(CURRENT_EMPLOYEE_ID)
+    elig = db.check_loan_eligibility(get_current_employee_id_from_context())
     if not elig["eligible"]:
-        await _send_ui("StatusBanner", {"message": f"Not eligible: {elig['reason']}", "type": "error"}, "main_card")
+        await _send_ui(
+            "StatusBanner",
+            {"message": f"Not eligible: {elig['reason']}", "type": "error"},
+            "main_card",
+        )
         return f"Cannot apply: {elig['reason']}"
     if amount > elig["max_amount"]:
         return f"Exceeds max ({elig['max_amount']:,} SAR)."
-    loan = db.create_loan(CURRENT_EMPLOYEE_ID, loan_type, amount, months)
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    await _send_ui("LoanCard", {
-        "employeeName": emp["name"] if emp else "", "loanType": loan["loan_type"],
-        "amount": loan["amount"], "currency": "SAR",
-        "remainingBalance": loan["remaining"], "monthlyInstallment": loan["monthly_installment"],
-        "installmentsLeft": loan["installments_left"], "status": "active",
-    }, "main_card")
+    loan = db.create_loan(get_current_employee_id_from_context(), loan_type, amount, months)
+    emp = db.get_employee(get_current_employee_id_from_context())
+    await _send_ui(
+        "LoanCard",
+        {
+            "employeeName": emp["name"] if emp else "",
+            "loanType": loan["loan_type"],
+            "amount": loan["amount"],
+            "currency": "SAR",
+            "remainingBalance": loan["remaining"],
+            "monthlyInstallment": loan["monthly_installment"],
+            "installmentsLeft": loan["installments_left"],
+            "status": "active",
+        },
+        "main_card",
+    )
     return f"Loan {loan['ref']} created! {amount:,.0f} SAR over {months} months."
 
 
 @function_tool()
 async def request_document(context: RunContext, document_type: str):
     """CREATE a document request."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    doc = db.create_document_request(CURRENT_EMPLOYEE_ID, document_type)
-    await _send_ui("DocumentRequestCard", {
-        "employeeName": emp["name"], "documentType": doc["document_type"],
-        "requestDate": doc["created_at"][:10], "status": "requested",
-        "estimatedDate": doc["estimated_date"], "referenceNumber": doc["ref"],
-    }, "main_card")
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    doc = db.create_document_request(get_current_employee_id_from_context(), document_type)
+    await _send_ui(
+        "DocumentRequestCard",
+        {
+            "employeeName": emp["name"],
+            "documentType": doc["document_type"],
+            "requestDate": doc["created_at"][:10],
+            "status": "requested",
+            "estimatedDate": doc["estimated_date"],
+            "referenceNumber": doc["ref"],
+        },
+        "main_card",
+    )
     return f"Request {doc['ref']} created! Ready in 2 days."
 
 
 @function_tool()
-async def create_travel_request(context: RunContext, destination: str, start_date: str, end_date: str, days: int, travel_type: str = "business"):
+async def create_travel_request(
+    context: RunContext,
+    destination: str,
+    start_date: str,
+    end_date: str,
+    days: int,
+    travel_type: str = "business",
+):
     """CREATE a travel request."""
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
-    if not emp: return "Not found."
-    tr = db.create_travel_request(CURRENT_EMPLOYEE_ID, destination, start_date, end_date, days, travel_type)
-    await _send_ui("TravelRequestCard", {
-        "employeeName": emp["name"], "destination": tr["destination"],
-        "travelType": tr["travel_type"], "startDate": tr["start_date"],
-        "endDate": tr["end_date"], "days": tr["days"],
-        "perDiem": tr["per_diem"], "totalAllowance": tr["total_allowance"],
-        "currency": "SAR", "status": "pending",
-    }, "main_card")
+    emp = db.get_employee(get_current_employee_id_from_context())
+    if not emp:
+        return "Not found."
+    tr = db.create_travel_request(
+        get_current_employee_id_from_context(), destination, start_date, end_date, days, travel_type
+    )
+    await _send_ui(
+        "TravelRequestCard",
+        {
+            "employeeName": emp["name"],
+            "destination": tr["destination"],
+            "travelType": tr["travel_type"],
+            "startDate": tr["start_date"],
+            "endDate": tr["end_date"],
+            "days": tr["days"],
+            "perDiem": tr["per_diem"],
+            "totalAllowance": tr["total_allowance"],
+            "currency": "SAR",
+            "status": "pending",
+        },
+        "main_card",
+    )
     return f"Travel {tr['ref']} created! {destination}, {days} days, {tr['total_allowance']:,} SAR."
+
+
+# ---- MANAGER TOOLS ----
+
+
+@function_tool()
+async def show_team_overview(context: RunContext):
+    """Show overview of all direct reports with their current status. Call when manager wants to see team overview."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You are not a manager."
+    emp = db.get_employee(emp_id)
+    reports = db.get_direct_reports(emp_id)
+    if not reports:
+        return "You have no direct reports."
+    att = db.get_team_attendance(emp_id)
+    att_map = {a["name"].split()[0]: a["status"] for a in att}
+    team = []
+    for r in reports:
+        first_name = r["name"].split()[0]
+        status = att_map.get(first_name, "unknown")
+        team.append({
+            "id": r["id"],
+            "name": r["name"],
+            "position": r["position"],
+            "department": r["department"],
+            "status": status,
+        })
+    await _send_ui("TeamOverviewCard", {
+        "managerName": emp["name"] if emp else "",
+        "team": team,
+    }, "main_card")
+    return f"You have {len(team)} direct reports."
+
+
+@function_tool()
+async def show_department_stats(context: RunContext):
+    """Show department statistics including headcount, leave, pending approvals, and attendance. Call when manager wants to see department stats."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You are not a manager."
+    emp = db.get_employee(emp_id)
+    stats = db.get_department_stats(emp_id)
+    await _send_ui("ManagerDashboard", {
+        "activeTab": "overview",
+        "managerName": emp["name"] if emp else "",
+        "department": emp["department"] if emp else "",
+        "stats": stats,
+    }, "main_card")
+    return f"Department: {stats['headcount']} employees, {stats['on_leave']} on leave, {stats['pending_approvals']} pending, {stats['avg_attendance']}% attendance."
+
+
+@function_tool()
+async def show_leave_calendar(context: RunContext):
+    """Show visual team leave calendar. Call when manager wants to see team leave calendar."""
+    emp_id = get_current_employee_id_from_context()
+    if not db.is_manager(emp_id):
+        return "You are not a manager."
+    emp = db.get_employee(emp_id)
+    reports = db.get_direct_reports(emp_id)
+    if not reports:
+        return "You have no direct reports."
+    conn = db.get_db()
+    rows = conn.execute(
+        """SELECT lr.employee_id, e.name, lr.start_date, lr.end_date, lr.leave_type, lr.status
+           FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id
+           WHERE e.manager_id = ? AND lr.status = 'approved'""",
+        (emp_id,),
+    ).fetchall()
+    conn.close()
+    leaves = [dict(r) for r in rows]
+    await _send_ui("ManagerDashboard", {
+        "activeTab": "calendar",
+        "managerName": emp["name"] if emp else "",
+        "leaves": leaves,
+    }, "main_card")
+    return f"Showing {len(leaves)} approved leaves."
 
 
 # ---- AGENT TOOLS LIST ----
 
 ALL_TOOLS = [
     # Interactive forms
-    show_leave_form, show_document_form, show_loan_form, show_travel_form, show_profile_edit,
+    show_leave_form,
+    show_document_form,
+    show_loan_form,
+    show_travel_form,
+    show_profile_edit,
     # Read
-    check_leave_balance, show_my_leave_requests, show_pending_approvals,
-    show_my_profile, show_pay_slip, check_loan_eligibility, show_loan_balance,
-    show_my_documents, show_announcements, show_team_attendance, show_status,
+    check_leave_balance,
+    show_my_leave_requests,
+    show_pending_approvals,
+    show_my_profile,
+    show_pay_slip,
+    check_loan_eligibility,
+    show_loan_balance,
+    show_my_documents,
+    show_announcements,
+    show_team_attendance,
+    show_status,
     # CRUD
-    apply_for_leave, approve_leave, apply_for_loan, request_document, create_travel_request,
+    apply_for_leave,
+    approve_leave,
+    apply_for_loan,
+    request_document,
+    create_travel_request,
+    # Manager
+    show_team_overview,
+    show_department_stats,
+    show_leave_calendar,
 ]
+
+
+def get_tools_for_employee(emp_id: str):
+    tools = list(ALL_TOOLS)
+    if not db.is_manager(emp_id):
+        tools = [t for t in tools if t.__name__ not in ("show_team_overview", "show_department_stats", "show_leave_calendar")]
+    return tools
 
 
 class TaliqAgent(Agent):
     def __init__(self):
-        emp = db.get_employee(CURRENT_EMPLOYEE_ID) or {}
+        emp_id = get_current_employee_id_from_context()
+        emp = db.get_employee(emp_id) or {}
         super().__init__(
             instructions=SYSTEM_PROMPT.format(
                 employee_name=emp.get("name", "Unknown"),
-                employee_id=CURRENT_EMPLOYEE_ID,
+                employee_id=emp_id,
                 department=emp.get("department", "Unknown"),
                 grade=emp.get("grade", "N/A"),
             ),
-            tools=ALL_TOOLS,
+            tools=get_tools_for_employee(emp_id),
         )
 
 
@@ -468,17 +805,33 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
     _room_ref = ctx.room
 
+    employee_id = DEFAULT_EMPLOYEE_ID
+    if ctx.room.metadata:
+        try:
+            metadata = json.loads(ctx.room.metadata)
+            employee_id = metadata.get("employee_id", DEFAULT_EMPLOYEE_ID)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    set_current_employee_id(employee_id)
+
     session = AgentSession(
-        vad=silero.VAD.load(min_silence_duration=0.8, activation_threshold=0.25, prefix_padding_duration=0.3),
+        vad=silero.VAD.load(
+            min_silence_duration=0.8,
+            activation_threshold=0.25,
+            prefix_padding_duration=0.3,
+        ),
         stt=deepgram.STT(model="nova-3", language="en"),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=openai.TTS(
-            model="speaches-ai/Kokoro-82M-v1.0-ONNX", voice="af_heart",
+            model="speaches-ai/Kokoro-82M-v1.0-ONNX",
+            voice="af_heart",
             base_url=os.getenv("SPEACHES_URL", "http://localhost:8000") + "/v1",
             api_key="not-needed",
         ),
         allow_interruptions=True,
-        min_endpointing_delay=0.3, max_endpointing_delay=2.5, min_interruption_duration=0.08,
+        min_endpointing_delay=0.3,
+        max_endpointing_delay=2.5,
+        min_interruption_duration=0.08,
     )
     _session_ref = session
 
@@ -488,13 +841,19 @@ async def entrypoint(ctx: JobContext):
             asyncio.ensure_future(_handle_data(pkt))
 
     await session.start(room=ctx.room, agent=TaliqAgent())
-    emp = db.get_employee(CURRENT_EMPLOYEE_ID)
+    emp = db.get_employee(get_current_employee_id_from_context())
     name = emp["name"].split()[0] if emp else "there"
-    await session.say(f"Ahlan {name}! I'm Taliq. How can I help?", allow_interruptions=True)
+    await session.say(
+        f"Ahlan {name}! I'm Taliq. How can I help?", allow_interruptions=True
+    )
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint, agent_name="taliq",
-        worker_type=WorkerType.ROOM, job_executor_type=JobExecutorType.THREAD,
-    ))
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            agent_name="taliq",
+            worker_type=WorkerType.ROOM,
+            job_executor_type=JobExecutorType.THREAD,
+        )
+    )
