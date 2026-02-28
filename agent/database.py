@@ -655,15 +655,87 @@ def _seed_training_courses(c):
 # ── Policy defaults (used as fallback) ──────────────────
 
 DEFAULT_POLICIES = {
-    "leave": {"annual": 30, "sick": 30, "emergency": 5, "study": 15, "max_carry_over": 5, "min_notice_days": 3, "approval_required": True},
-    "loan": {"max_amount_multiplier": 2, "max_emi_percent": 33, "min_service_years": 1, "approval_required": True, "types": ["Interest-Free", "Advance Salary", "Personal", "Emergency"]},
-    "attendance": {"work_start": "08:00", "work_end": "17:00", "late_threshold": "08:30", "standard_hours": 8, "max_overtime_hours": 4, "overtime_approval": True},
-    "travel": {"max_days": 30, "approval_required": True, "per_diem_chairman_intl": 3500, "per_diem_chairman_local": 2000, "per_diem_clevel_intl": 1750, "per_diem_clevel_local": 1200, "per_diem_other_intl": 1350, "per_diem_other_local": 900},
-    "grievance": {"categories": ["harassment", "discrimination", "safety", "policy", "compensation", "other"], "severity_levels": ["low", "medium", "high", "critical"], "sla_hours": {"low": 168, "medium": 72, "high": 24, "critical": 4}},
+    "company": {
+        "company_name_en": "Morabaha MRNA",
+        "company_name_ar": "مرابحة مرنا",
+        "cr_number": "",
+        "mol_number": "",
+        "gosi_reg_number": "",
+        "vat_number": "",
+        "address_en": "",
+        "address_ar": "",
+        "city": "Riyadh",
+        "country": "Saudi Arabia",
+        "phone": "",
+        "email": "",
+        "website": "",
+        "legal_rep_name": "",
+        "legal_rep_title": "CEO"
+    },
+    "leave": {
+        "annual": 30, "sick": 30, "emergency": 5, "study": 15,
+        "maternity": 70, "paternity": 3, "marriage": 5, "bereavement": 5, "hajj": 15,
+        "max_carry_over": 5, "min_notice_days": 3,
+        "approval_required": True, "allow_half_day": True, "allow_negative_balance": False
+    },
+    "loan": {
+        "max_amount_multiplier": 2, "max_emi_percent": 33, "min_service_years": 1,
+        "max_concurrent_loans": 1, "min_months_between": 6,
+        "approval_required": True,
+        "types": ["Interest-Free", "Advance Salary", "Personal", "Emergency"]
+    },
+    "attendance": {
+        "work_start": "08:00", "work_end": "17:00", "late_threshold": "08:30",
+        "standard_hours": 8, "max_overtime_hours": 4, "overtime_rate": 1.5,
+        "overtime_approval": True, "grace_period_minutes": 15,
+        "weekend_days": ["Friday", "Saturday"]
+    },
+    "ramadan": {
+        "enabled": False,
+        "start_date": "2026-02-28",
+        "end_date": "2026-03-29",
+        "work_start": "10:00",
+        "work_end": "15:00",
+        "standard_hours": 6,
+        "apply_to_all": True
+    },
+    "payroll": {
+        "pay_cycle": "monthly",
+        "pay_day": 27,
+        "currency": "SAR",
+        "housing_pct_of_basic": 25,
+        "transport_standard": 1500,
+        "overtime_multiplier": 1.5,
+        "bank_transfer_method": "bank_transfer",
+        "wps_enabled": True
+    },
+    "holidays": {
+        "national_day": True,
+        "founding_day": True,
+        "eid_al_fitr_days": 4,
+        "eid_al_adha_days": 4,
+        "custom_holidays": []
+    },
+    "travel": {
+        "max_days": 30, "approval_required": True,
+        "per_diem_chairman_intl": 3500, "per_diem_chairman_local": 2000,
+        "per_diem_clevel_intl": 1750, "per_diem_clevel_local": 1200,
+        "per_diem_other_intl": 1350, "per_diem_other_local": 900,
+        "advance_allowed": True, "advance_max_percent": 80
+    },
+    "expenses": {
+        "auto_approve_below": 200,
+        "receipt_required_above": 100,
+        "max_claim_per_category_year": 50000,
+        "reimbursement_processing_days": 7,
+        "categories_enabled": ["travel", "meals", "office_supplies", "training", "communication", "other"],
+        "claim_types_enabled": ["medical", "dental", "vision", "education", "relocation", "other"]
+    },
     "gosi": {
         "employee_rate": 9.75,
         "employer_rate": 11.75,
         "max_insurable_salary": 45000,
+        "min_insurable_salary": 1500,
         "annuities_employee": 9.75,
         "annuities_employer": 9.0,
         "occupational_hazards_employer": 2.0,
@@ -684,6 +756,77 @@ DEFAULT_POLICIES = {
         "max_months_salary": 0,
         "based_on": "last_basic_plus_housing",
         "effective_date": "2026-01-01"
+    },
+    "probation": {
+        "probation_days": 90,
+        "probation_extendable": True,
+        "notice_unlimited": 60,
+        "notice_fixed": 30,
+        "notice_probation": 0,
+        "notice_deduction": True
+    },
+    "documents": {
+        "signatory_name": "",
+        "signatory_title": "HR Director",
+        "letter_prefix": "LTR",
+        "auto_expiry_days": 90,
+        "processing_days": 2
+    },
+    "iqama_visa": {
+        "reminder_days_30": 30,
+        "reminder_days_60": 60,
+        "reminder_days_90": 90,
+        "auto_escalation": True,
+        "medical_insurance_mandatory": True,
+        "iqama_renewal_cost": 650
+    },
+    "exit": {
+        "clearance_departments": ["IT", "Finance", "HR", "Admin", "Security"],
+        "notice_enforcement": True,
+        "settlement_deadline_days": 7,
+        "asset_return_checklist": ["Laptop", "ID Card", "Access Card", "Company Phone", "Parking Card"],
+        "exit_interview_required": True
+    },
+    "recruitment": {
+        "stages_enabled": ["hr_screening", "technical", "behavioral", "leadership"],
+        "min_passing_score": 3,
+        "max_interviews_per_candidate": 4,
+        "offer_approval_required": True,
+        "reference_check_required": True
+    },
+    "training": {
+        "mandatory_deadline_days": 30,
+        "annual_hours_required": 40,
+        "budget_per_employee": 5000,
+        "certification_reminder_days": 30,
+        "compliance_target": 95
+    },
+    "grievance": {
+        "categories": ["harassment", "discrimination", "safety", "policy", "compensation", "other"],
+        "severity_levels": ["low", "medium", "high", "critical"],
+        "sla_hours_low": 168,
+        "sla_hours_medium": 72,
+        "sla_hours_high": 24,
+        "sla_hours_critical": 4,
+        "escalation_enabled": True,
+        "anonymous_allowed": False
+    },
+    "notifications": {
+        "email_enabled": False,
+        "whatsapp_enabled": False,
+        "webhook_url": "",
+        "notify_on_approval": True,
+        "notify_on_rejection": True,
+        "notify_manager_on_request": True,
+        "daily_digest": False
+    },
+    "security": {
+        "admin_employee_ids": ["E005"],
+        "pin_min_length": 4,
+        "session_timeout_minutes": 60,
+        "max_login_attempts": 5,
+        "lockout_duration_minutes": 15,
+        "require_pin_change_days": 0
     },
 }
 

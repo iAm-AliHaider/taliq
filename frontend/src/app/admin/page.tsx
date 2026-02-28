@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import SettingsPanel from "./settings";
 
 async function adminFetch(params: string, options?: RequestInit): Promise<any> {
   try {
@@ -20,7 +21,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Policies", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -540,145 +541,22 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* POLICIES - Editable */}
-        {tab === "Policies" && (
-          <div className="space-y-4">
-            {Object.entries(policies).map(([category, config]) => {
-              const isEditing = editingPolicy === category;
-              const draft = isEditing ? policyDraft : config;
-              const { _id, _updated_at, _updated_by, ...fields } = draft;
-              const LABELS: Record<string, string> = {
-                leave: "Leave Policy", loan: "Loan Policy", attendance: "Attendance Policy",
-                travel: "Travel & Per Diem", grievance: "Grievance & SLA",
-              };
-              const COLORS: Record<string, string> = {
-                leave: "from-blue-50 to-indigo-50", loan: "from-emerald-50 to-teal-50",
-                attendance: "from-amber-50 to-orange-50", travel: "from-sky-50 to-cyan-50",
-                grievance: "from-red-50 to-pink-50",
-              };
-              return (
-                <div key={category} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                  <div className={`px-5 py-3 bg-gradient-to-r ${COLORS[category] || "from-gray-50 to-gray-100"} border-b flex items-center justify-between`}>
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-800">{LABELS[category] || category}</h3>
-                      {config._updated_at && <p className="text-[10px] text-gray-400">Last updated: {new Date(config._updated_at).toLocaleDateString()}</p>}
-                    </div>
-                    {!isEditing ? (
-                      <button onClick={() => { setEditingPolicy(category); setPolicyDraft({ ...config }); }}
-                        className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 shadow-sm">
-                        Edit
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button onClick={() => handleSavePolicy(category)} disabled={savingPolicy}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-medium hover:bg-emerald-600 disabled:opacity-50">
-                          {savingPolicy ? "Saving..." : "Save"}
-                        </button>
-                        <button onClick={() => setEditingPolicy(null)}
-                          className="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-300">Cancel</button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {Object.entries(fields).map(([key, value]) => {
-                        const label = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                        if (typeof value === "object" && !Array.isArray(value)) {
-                          return (
-                            <div key={key} className="col-span-2 md:col-span-3 lg:col-span-4">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">{label}</p>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {Object.entries(value as Record<string, any>).map(([sk, sv]) => {
-                                  if (typeof sv === "object" && sv !== null && !Array.isArray(sv)) {
-                                    return (
-                                      <div key={sk} className="col-span-2 md:col-span-4">
-                                        <p className="text-[10px] text-gray-400 capitalize font-medium mb-1">{sk.replace(/_/g, " ")}</p>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                          {Object.entries(sv as Record<string, any>).map(([dk, dv]) => (
-                                            <div key={dk} className="bg-white rounded-lg p-2 border border-gray-100">
-                                              <span className="text-[10px] text-gray-400 block capitalize">{dk.replace(/_/g, " ")}</span>
-                                              {isEditing ? (
-                                                <input type={typeof dv === "number" ? "number" : "text"} value={typeof dv === "object" ? JSON.stringify(dv) : dv} onChange={e => {
-                                                  const newDraft = { ...policyDraft };
-                                                  if (!newDraft[key]) newDraft[key] = {};
-                                                  if (!newDraft[key][sk]) newDraft[key][sk] = { ...sv };
-                                                  newDraft[key][sk][dk] = typeof dv === "number" ? Number(e.target.value) : e.target.value;
-                                                  setPolicyDraft(newDraft);
-                                                }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
-                                              ) : (
-                                                <span className="text-sm font-bold text-gray-900">{typeof dv === "object" ? JSON.stringify(dv) : String(dv)}</span>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  return (
-                                    <div key={sk} className="bg-gray-50 rounded-lg p-2">
-                                      <span className="text-[10px] text-gray-400 block capitalize">{sk.replace(/_/g, " ")}</span>
-                                      {isEditing ? (
-                                        <input type={typeof sv === "number" ? "number" : "text"} value={typeof sv === "boolean" ? String(sv) : sv} onChange={e => {
-                                          const newDraft = { ...policyDraft };
-                                          (newDraft[key] as any)[sk] = typeof sv === "number" ? Number(e.target.value) : typeof sv === "boolean" ? e.target.value === "true" : e.target.value;
-                                          setPolicyDraft(newDraft);
-                                        }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
-                                      ) : (
-                                        <span className="text-sm font-bold text-gray-900">{typeof sv === "boolean" ? (sv ? "Yes" : "No") : String(sv)}</span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        }
-                        if (Array.isArray(value)) {
-                          return (
-                            <div key={key} className="col-span-2 md:col-span-3 lg:col-span-4">
-                              <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">{label}</p>
-                              <div className="flex flex-wrap gap-1">
-                                {(value as string[]).map((v, i) => (
-                                  <span key={i} className="px-2 py-0.5 rounded-full bg-gray-100 text-xs text-gray-700 border border-gray-200">{v}</span>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        if (typeof value === "boolean") {
-                          return (
-                            <div key={key} className="bg-gray-50 rounded-xl p-3">
-                              <p className="text-[10px] text-gray-400">{label}</p>
-                              {isEditing ? (
-                                <button onClick={() => setPolicyDraft({ ...policyDraft, [key]: !policyDraft[key] })}
-                                  className={`mt-1 px-3 py-1 rounded-lg text-xs font-bold ${policyDraft[key] ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                  {policyDraft[key] ? "Yes" : "No"}
-                                </button>
-                              ) : (
-                                <p className={`text-lg font-bold ${value ? "text-emerald-600" : "text-red-600"}`}>{value ? "Yes" : "No"}</p>
-                              )}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={key} className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-[10px] text-gray-400">{label}</p>
-                            {isEditing ? (
-                              <input type={typeof value === "number" ? "number" : "text"} value={policyDraft[key]}
-                                onChange={e => setPolicyDraft({ ...policyDraft, [key]: typeof value === "number" ? Number(e.target.value) : e.target.value })}
-                                className="w-full text-lg font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
-                            ) : (
-                              <p className="text-lg font-bold text-gray-900">{String(value)}</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* SETTINGS - Comprehensive HR Configuration */}
+        {tab === "Settings" && (
+          <SettingsPanel
+            policies={policies}
+            onSave={async (category, config) => {
+              const res = await adminFetch("?action=policy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ category, config }),
+              });
+              if (res?.ok) {
+                const updated = await adminFetch("section=policies");
+                if (updated) setPolicies(updated);
+              }
+            }}
+          />
         )}
 
         {/* LETTERS */}
