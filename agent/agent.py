@@ -545,7 +545,7 @@ async def show_my_documents(context: RunContext):
         {
             "employeeName": emp["name"],
             "documentType": doc["document_type"],
-            "requestDate": doc["created_at"][:10],
+            "requestDate": str(doc["created_at"])[:10],
             "status": doc["status"],
             "referenceNumber": doc["ref"],
         },
@@ -567,7 +567,7 @@ async def show_announcements(context: RunContext):
             "title": a["title"],
             "content": a["content"],
             "author": a.get("author"),
-            "date": a["created_at"][:10],
+            "date": str(a["created_at"])[:10],
             "priority": a.get("priority", "normal"),
             "acknowledgedCount": a.get("acknowledged_count"),
             "totalCount": a.get("total_count"),
@@ -703,7 +703,7 @@ async def request_document(context: RunContext, document_type: str):
         {
             "employeeName": emp["name"],
             "documentType": doc["document_type"],
-            "requestDate": doc["created_at"][:10],
+            "requestDate": str(doc["created_at"])[:10],
             "status": "requested",
             "estimatedDate": doc["estimated_date"],
             "referenceNumber": doc["ref"],
@@ -1936,7 +1936,7 @@ async def show_end_of_service(ctx: RunContext, reason: str = "termination") -> s
 async def generate_letter(letter_type: str, purpose: str = "", addressed_to: str = "") -> str:
     """Generate an HR letter. Types: employment_certificate, salary_certificate, experience_letter, noc_letter, bank_letter.
     Call when employee asks for any official letter, certificate, or NOC."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     valid_types = ["employment_certificate", "salary_certificate", "experience_letter", "noc_letter", "promotion_letter", "bank_letter"]
     lt = letter_type.lower().replace(" ", "_")
     if lt not in valid_types:
@@ -1968,7 +1968,7 @@ async def generate_letter(letter_type: str, purpose: str = "", addressed_to: str
 @function_tool
 async def show_my_letters() -> str:
     """Show all letters generated for the current employee."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     letters = db.get_employee_letters(emp_id)
     if not letters:
         return "No letters found. You can request employment certificates, salary certificates, experience letters, or NOC letters."
@@ -1987,7 +1987,7 @@ async def show_my_letters() -> str:
 @function_tool
 async def show_my_contract() -> str:
     """Show the employee's current contract details including type, dates, probation, and salary."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     contract = db.get_employee_contract(emp_id)
     emp = db.get_employee(emp_id) or {}
     if not contract:
@@ -2029,7 +2029,7 @@ async def show_expiring_contracts() -> str:
 @function_tool
 async def show_my_assets() -> str:
     """Show all company assets assigned to the employee (laptops, phones, cards, etc)."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     assets = db.get_employee_assets(emp_id)
     if not assets:
         return "No company assets are currently assigned to you."
@@ -2060,7 +2060,7 @@ async def show_all_assets() -> str:
 @function_tool
 async def show_my_shift() -> str:
     """Show the employee's current work shift schedule."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     shift = db.get_employee_shift(emp_id)
     if not shift:
         return "No shift schedule assigned. Contact your manager."
@@ -2079,7 +2079,7 @@ async def show_my_shift() -> str:
 @function_tool
 async def show_team_shifts() -> str:
     """Show shift assignments for all team members. Manager only."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     shifts = db.get_team_shifts(emp_id)
     if not shifts:
         return "No team members found."
@@ -2176,7 +2176,7 @@ async def show_org_chart() -> str:
 @function_tool
 async def show_my_iqama_visa() -> str:
     """Show employee's Iqama, visa, passport, and medical insurance documents with expiry dates."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     docs = db.get_employee_documents_visa(emp_id)
     if not docs:
         return "No Iqama/visa documents on file."
@@ -2214,7 +2214,7 @@ async def show_expiring_documents() -> str:
 @function_tool
 async def initiate_exit_request(exit_type: str = "resignation", reason: str = "") -> str:
     """Initiate an exit/resignation/termination request. Calculates final settlement including EOS, leave encashment, and pending salary."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     result = db.initiate_exit(emp_id, exit_type, reason or None)
     if not result:
         return "Could not initiate exit request."
@@ -2232,7 +2232,7 @@ async def initiate_exit_request(exit_type: str = "resignation", reason: str = ""
 @function_tool
 async def show_exit_status() -> str:
     """Show the current exit/offboarding request status and clearance progress."""
-    emp_id = get_current_employee_id()
+    emp_id = get_current_employee_id_from_context()
     ex = db.get_exit_request(emp_id)
     if not ex:
         return "No active exit request found."
