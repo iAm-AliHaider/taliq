@@ -29,12 +29,52 @@ const TYPE_LABELS: Record<string, string> = {
   promotion_letter: "Promotion Letter",
 };
 
+const LETTER_BODIES: Record<string, (p: Props) => string> = {
+  employment_certificate: (p) => `This is to certify that <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}) has been employed at our organization as <strong>${p.position}</strong> in the <strong>${p.department}</strong> department since <strong>${p.joinDate}</strong>.<br/><br/>This certificate is issued upon the employee's request${p.purpose ? ` for the purpose of ${p.purpose}` : ""}.`,
+  salary_certificate: (p) => `This is to certify that <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}) is employed as <strong>${p.position}</strong> in the <strong>${p.department}</strong> department.<br/><br/>The employee's monthly compensation is as follows:<br/>Basic Salary: <strong>${p.basicSalary?.toLocaleString()} SAR</strong><br/>Housing Allowance: <strong>${p.housingAllowance?.toLocaleString()} SAR</strong><br/>Transport Allowance: <strong>${p.transportAllowance?.toLocaleString()} SAR</strong><br/>Total Monthly Salary: <strong>${p.totalSalary?.toLocaleString()} SAR</strong><br/><br/>This certificate is issued upon the employee's request${p.purpose ? ` for the purpose of ${p.purpose}` : ""}.`,
+  experience_letter: (p) => `This is to certify that <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}) has been working with our organization since <strong>${p.joinDate}</strong> as <strong>${p.position}</strong> in the <strong>${p.department}</strong> department.<br/><br/>During their tenure, they have demonstrated excellent professional conduct and competence. We wish them continued success in their future endeavors.`,
+  noc_letter: (p) => `This is to confirm that we have No Objection to <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}), currently employed as <strong>${p.position}</strong> in the <strong>${p.department}</strong> department${p.purpose ? `, for the purpose of ${p.purpose}` : ""}.<br/><br/>This NOC is issued at the employee's request and does not relieve them of their contractual obligations.`,
+  bank_letter: (p) => `This is to confirm that <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}) is a full-time employee of our organization, serving as <strong>${p.position}</strong> in the <strong>${p.department}</strong> department since <strong>${p.joinDate}</strong>.<br/><br/>Their total monthly salary is <strong>${p.totalSalary?.toLocaleString()} SAR</strong>, credited directly to their bank account via WPS.<br/><br/>This letter is issued for banking purposes at the employee's request.`,
+  promotion_letter: (p) => `We are pleased to confirm that <strong>${p.employeeName}</strong> (Employee ID: ${p.employeeId}) has been promoted to the position of <strong>${p.position}</strong> in the <strong>${p.department}</strong> department, effective immediately.<br/><br/>We recognize their dedication and contributions to the organization.`,
+};
+
+function generatePDF(props: Props) {
+  const label = TYPE_LABELS[props.letterType] || props.letterType;
+  const body = (LETTER_BODIES[props.letterType] || LETTER_BODIES.employment_certificate)(props);
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${label}</title><style>
+    @media print { body { margin: 0; } @page { margin: 2cm; } }
+    body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 40px; color: #1a1a1a; line-height: 1.8; }
+    .header { border-bottom: 3px solid #10B981; padding-bottom: 20px; margin-bottom: 30px; }
+    .header h1 { font-size: 22px; color: #10B981; margin: 0; }
+    .header p { font-size: 12px; color: #666; margin: 4px 0 0; }
+    .date { text-align: right; color: #666; font-size: 13px; margin-bottom: 20px; }
+    .to { margin-bottom: 20px; }
+    .to span { font-weight: 600; }
+    .subject { font-size: 15px; font-weight: 700; text-align: center; margin: 25px 0; text-decoration: underline; }
+    .body { font-size: 14px; }
+    .signature { margin-top: 60px; }
+    .signature .line { border-top: 1px solid #ccc; width: 200px; margin-top: 50px; padding-top: 5px; font-size: 13px; color: #666; }
+    .ref { font-size: 11px; color: #999; margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; }
+    .footer { text-align: center; font-size: 10px; color: #999; margin-top: 30px; }
+  </style></head><body>
+    <div class="header"><h1>MORABAHA MRNA</h1><p>Kingdom of Saudi Arabia</p></div>
+    <div class="date">${props.letterDate}</div>
+    <div class="to">To: <span>${props.addressedTo || "To Whom It May Concern"}</span></div>
+    <div class="subject">RE: ${label}</div>
+    <div class="body"><p>${body}</p><p>Should you require any further information, please do not hesitate to contact the Human Resources department.</p></div>
+    <div class="signature"><p>Yours sincerely,</p><div class="line">Authorized Signatory<br/>Human Resources Department</div></div>
+    <div class="ref">Reference: ${props.ref || "N/A"} | Employee: ${props.employeeId} | Grade: ${props.grade || "N/A"}</div>
+    <div class="footer">This is a system-generated document from Taliq HR Platform</div>
+  </body></html>`;
+  const w = window.open("", "_blank");
+  if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
+}
+
 export function LetterCard(props: Props) {
   const label = TYPE_LABELS[props.letterType] || props.letterType;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out]">
-      {/* Header */}
       <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -50,17 +90,11 @@ export function LetterCard(props: Props) {
         </div>
       </div>
 
-      {/* Letter Content */}
       <div className="p-5 space-y-4">
         <div className="text-right text-xs text-gray-500">{props.letterDate}</div>
-
         {props.addressedTo && (
-          <div>
-            <p className="text-xs text-gray-400">To</p>
-            <p className="text-sm font-medium text-gray-800">{props.addressedTo}</p>
-          </div>
+          <div><p className="text-xs text-gray-400">To</p><p className="text-sm font-medium text-gray-800">{props.addressedTo}</p></div>
         )}
-
         <div className="bg-gray-50 rounded-xl p-4 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div><span className="text-[10px] text-gray-400 block">Employee</span><span className="text-sm font-semibold text-gray-900">{props.employeeName}</span></div>
@@ -70,7 +104,6 @@ export function LetterCard(props: Props) {
             <div><span className="text-[10px] text-gray-400 block">Join Date</span><span className="text-sm text-gray-700">{props.joinDate}</span></div>
             {props.nationality && <div><span className="text-[10px] text-gray-400 block">Nationality</span><span className="text-sm text-gray-700">{props.nationality}</span></div>}
           </div>
-
           {(props.letterType === "salary_certificate" || props.letterType === "bank_letter") && (
             <div className="border-t border-gray-200 pt-2 mt-2">
               <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Salary Details</p>
@@ -83,14 +116,8 @@ export function LetterCard(props: Props) {
             </div>
           )}
         </div>
-
-        {props.purpose && (
-          <div className="text-xs text-gray-500">
-            <span className="font-medium">Purpose:</span> {props.purpose}
-          </div>
-        )}
-
-        <button className="w-full py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2">
+        {props.purpose && <div className="text-xs text-gray-500"><span className="font-medium">Purpose:</span> {props.purpose}</div>}
+        <button onClick={() => generatePDF(props)} className="w-full py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           Download PDF
         </button>

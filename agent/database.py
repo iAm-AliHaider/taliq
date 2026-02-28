@@ -2184,8 +2184,29 @@ def _create_notification(employee_id, ntype, title, message):
             (employee_id, ntype, title, message))
         conn.commit()
         conn.close()
+        # Push notification via webhook if configured
+        _push_notification(employee_id, title, message)
     except Exception:
         pass
+
+
+def _push_notification(employee_id, title, message):
+    """Send push notification via webhook (WhatsApp, email, etc)."""
+    webhook_url = os.getenv("NOTIFICATION_WEBHOOK_URL")
+    if not webhook_url:
+        return
+    try:
+        import urllib.request
+        data = json.dumps({
+            "employee_id": employee_id,
+            "title": title,
+            "message": message,
+            "timestamp": str(datetime.now()),
+        }).encode("utf-8")
+        req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # Don't block on notification failure
 
 
 

@@ -10,6 +10,7 @@ export function ExpenseForm({ categories, prefill, onAction }: { categories?: st
   const [amount, setAmount] = useState(prefill?.amount ? String(prefill.amount) : "");
   const [expenseDate, setExpenseDate] = useState(prefill?.expense_date || new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const canSubmit = category && description && amount && Number(amount) > 0;
 
@@ -52,6 +53,14 @@ export function ExpenseForm({ categories, prefill, onAction }: { categories?: st
             <input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200 transition-all" />
           </div>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1.5">Receipt (optional)</label>
+          <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 cursor-pointer hover:border-orange-300 transition-all">
+            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+            <span className="text-xs text-gray-500">{receiptFile ? receiptFile.name : "Upload receipt (JPG, PNG, PDF)"}</span>
+            <input type="file" accept="image/*,.pdf" onChange={e => setReceiptFile(e.target.files?.[0] || null)} className="hidden" />
+          </label>
         </div>
         <button onClick={handleSubmit} disabled={!canSubmit || submitting}
           className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-150 active:scale-[0.98] ${
