@@ -415,7 +415,8 @@ async def show_pay_slip(context: RunContext, month: str = "February 2026"):
     if not emp:
         return "Not found."
     sal = emp["salary"]
-    gosi_rate = 9.75
+    gosi_policy = db.get_policy("gosi.employee_rate")
+    gosi_rate = gosi_policy if gosi_policy else 9.75
     gosi_amount = round(sal["basic"] * gosi_rate / 100, 2)
     gross = sal["total"]
 

@@ -20,7 +20,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Policies"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Policies", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -91,6 +91,18 @@ export default function AdminPage() {
   // Grievance actions
   const [grievanceAction, setGrievanceAction] = useState<string | null>(null);
   const [grievanceResolution, setGrievanceResolution] = useState("");
+  // New tabs data
+  const [letters, setLetters] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [assets, setAssets] = useState<any[]>([]);
+  const [shifts, setShifts] = useState<any>({ shifts: [], assignments: [] });
+  const [iqama, setIqama] = useState<any[]>([]);
+  const [exits, setExits] = useState<any[]>([]);
+  const [reports, setReports] = useState<any>(null);
+  // Create employee
+  const [showCreateEmp, setShowCreateEmp] = useState(false);
+  const [newEmp, setNewEmp] = useState<Record<string, string>>({ id: "", name: "", nameAr: "", position: "", department: "", email: "", phone: "", nationality: "Saudi", grade: "", managerId: "", basicSalary: "0", housingAllowance: "0", transportAllowance: "0", pin: "1234" });
+  const [creatingEmp, setCreatingEmp] = useState(false);
   
 
   useEffect(() => {
@@ -113,6 +125,13 @@ export default function AdminPage() {
       adminFetch("section=announcements").then(d => d && setAnnouncements(d));
       adminFetch("section=grievances").then(d => d && setGrievances(d));
       adminFetch("section=policies").then(d => d && setPolicies(d));
+      adminFetch("section=letters").then(d => d && setLetters(d));
+      adminFetch("section=contracts").then(d => d && setContracts(d));
+      adminFetch("section=assets").then(d => d && setAssets(d));
+      adminFetch("section=shifts").then(d => d && setShifts(d));
+      adminFetch("section=iqama").then(d => d && setIqama(d));
+      adminFetch("section=exits").then(d => d && setExits(d));
+      adminFetch("section=reports").then(d => d && setReports(d));
     }
   }, [authed]);
 
@@ -168,6 +187,26 @@ export default function AdminPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
+    });
+    loadData();
+  };
+
+  const handleCreateEmployee = async () => {
+    if (!newEmp.id || !newEmp.name) return;
+    setCreatingEmp(true);
+    await adminFetch("?action=create_employee", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newEmp),
+    });
+    setShowCreateEmp(false); setCreatingEmp(false);
+    setNewEmp({ id: "", name: "", nameAr: "", position: "", department: "", email: "", phone: "", nationality: "Saudi", grade: "", managerId: "", basicSalary: "0", housingAllowance: "0", transportAllowance: "0", pin: "1234" });
+    loadData();
+  };
+
+  const handleClearanceUpdate = async (ref: string, item: string, status: string) => {
+    await adminFetch("?action=update_clearance", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref, item, status }),
     });
     loadData();
   };
@@ -261,7 +300,27 @@ export default function AdminPage() {
         {/* EMPLOYEES with Manager Assignment */}
         {tab === "Employees" && (
           <div className="space-y-4">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employees..." className="w-full px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
+            <div className="flex gap-2">
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employees..." className="flex-1 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500" />
+            <button onClick={() => setShowCreateEmp(!showCreateEmp)} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 whitespace-nowrap">+ New Employee</button>
+            </div>
+            {showCreateEmp && (
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Create Employee</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(newEmp).map(([k, v]) => (
+                    <div key={k}>
+                      <label className="text-[10px] text-gray-400 uppercase block mb-1">{k.replace(/([A-Z])/g, " $1").trim()}</label>
+                      <input value={v} onChange={e => setNewEmp({...newEmp, [k]: e.target.value})} className="w-full px-3 py-1.5 rounded-lg border border-gray-200 text-sm" />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button onClick={handleCreateEmployee} disabled={creatingEmp} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 disabled:opacity-50">{creatingEmp ? "Creating..." : "Create"}</button>
+                  <button onClick={() => setShowCreateEmp(false)} className="px-4 py-2 rounded-xl bg-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-300">Cancel</button>
+                </div>
+              </div>
+            )}
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <table className="w-full">
                 <thead>
@@ -619,6 +678,229 @@ export default function AdminPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* LETTERS */}
+        {tab === "Letters" && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">Generated Letters</h3>
+              <Badge text={`${letters.length} total`} color="blue" />
+            </div>
+            <div className="divide-y divide-gray-50">
+              {letters.map((l: any) => (
+                <div key={l.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{l.employee_name}</p>
+                    <p className="text-[10px] text-gray-400">{l.ref} - {l.letter_type?.replace(/_/g, " ")} - {l.department}</p>
+                    {l.purpose && <p className="text-[10px] text-gray-400 italic">Purpose: {l.purpose}</p>}
+                  </div>
+                  <StatusBadge status={l.status} />
+                </div>
+              ))}
+              {letters.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No letters generated</div>}
+            </div>
+          </div>
+        )}
+
+        {/* CONTRACTS */}
+        {tab === "Contracts" && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800">Employee Contracts</h3>
+            </div>
+            <table className="w-full"><thead><tr className="bg-gray-50 border-b">
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Employee</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Start</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">End</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Salary</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Status</th>
+            </tr></thead><tbody className="divide-y divide-gray-50">
+              {contracts.map((c: any, i: number) => (
+                <tr key={i} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-2"><p className="text-xs font-medium text-gray-900">{c.employee_name}</p><p className="text-[10px] text-gray-400">{c.department}</p></td>
+                  <td className="px-4 py-2"><Badge text={c.contract_type} color={c.contract_type === "fixed" ? "amber" : "blue"} /></td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{c.start_date}</td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{c.end_date || "Unlimited"}</td>
+                  <td className="px-4 py-2 text-xs font-medium text-gray-900">{c.salary?.toLocaleString()} SAR</td>
+                  <td className="px-4 py-2"><StatusBadge status={c.status} /></td>
+                </tr>
+              ))}
+            </tbody></table>
+          </div>
+        )}
+
+        {/* ASSETS */}
+        {tab === "Assets" && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-800">Asset Inventory</h3>
+              <div className="flex gap-2">
+                <Badge text={`${assets.filter((a:any) => a.status === "assigned").length} assigned`} color="blue" />
+                <Badge text={`${assets.filter((a:any) => a.status === "available").length} available`} color="emerald" />
+              </div>
+            </div>
+            <table className="w-full"><thead><tr className="bg-gray-50 border-b">
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Asset</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Assigned To</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Condition</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Status</th>
+            </tr></thead><tbody className="divide-y divide-gray-50">
+              {assets.map((a: any) => (
+                <tr key={a.ref} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-2"><p className="text-xs font-medium text-gray-900">{a.name}</p><p className="text-[10px] text-gray-400">{a.ref} - {a.serial_number}</p></td>
+                  <td className="px-4 py-2 text-xs text-gray-600 capitalize">{a.asset_type?.replace("_"," ")}</td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{a.assigned_name || "Unassigned"}</td>
+                  <td className="px-4 py-2"><Badge text={a.condition || "good"} color={a.condition === "good" ? "emerald" : "amber"} /></td>
+                  <td className="px-4 py-2"><StatusBadge status={a.status} /></td>
+                </tr>
+              ))}
+            </tbody></table>
+          </div>
+        )}
+
+        {/* SHIFTS */}
+        {tab === "Shifts" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-800 mb-3">Shift Definitions</h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {(shifts.shifts || []).map((s: any) => (
+                  <div key={s.id} className={`rounded-xl p-3 border ${s.is_night_shift ? "bg-indigo-50 border-indigo-200" : "bg-gray-50 border-gray-200"}`}>
+                    <p className="text-sm font-bold text-gray-900">{s.name}</p>
+                    <p className="text-xs text-gray-500">{s.start_time} - {s.end_time}</p>
+                    <p className="text-[10px] text-gray-400">{s.break_minutes}min break{s.differential_pct > 0 ? ` +${s.differential_pct}%` : ""}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b"><h3 className="text-sm font-semibold text-gray-800">Current Assignments</h3></div>
+              <div className="divide-y divide-gray-50">
+                {(shifts.assignments || []).map((a: any, i: number) => (
+                  <div key={i} className="px-5 py-2 flex items-center justify-between">
+                    <div><p className="text-sm font-medium text-gray-900">{a.name}</p><p className="text-[10px] text-gray-400">{a.department}</p></div>
+                    <Badge text={a.shift_name} color="blue" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* IQAMA/VISA */}
+        {tab === "Iqama/Visa" && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800">Iqama & Visa Documents</h3>
+            </div>
+            <table className="w-full"><thead><tr className="bg-gray-50 border-b">
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Employee</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Number</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Expiry</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Status</th>
+            </tr></thead><tbody className="divide-y divide-gray-50">
+              {iqama.map((d: any, i: number) => {
+                const days = Math.ceil((new Date(d.expiry_date).getTime() - Date.now()) / 86400000);
+                return (
+                  <tr key={i} className="hover:bg-gray-50/50">
+                    <td className="px-4 py-2"><p className="text-xs font-medium text-gray-900">{d.employee_name}</p><p className="text-[10px] text-gray-400">{d.department}</p></td>
+                    <td className="px-4 py-2 text-xs text-gray-600 capitalize">{d.document_type?.replace("_"," ")}</td>
+                    <td className="px-4 py-2 text-xs text-gray-600">{d.document_number}</td>
+                    <td className="px-4 py-2"><span className={`text-xs font-medium ${days <= 30 ? "text-red-600" : days <= 90 ? "text-amber-600" : "text-gray-600"}`}>{d.expiry_date} {days <= 90 ? `(${days}d)` : ""}</span></td>
+                    <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
+                  </tr>
+                );
+              })}
+            </tbody></table>
+          </div>
+        )}
+
+        {/* EXITS */}
+        {tab === "Exits" && (
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800">Exit / Offboarding Requests</h3>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {exits.map((ex: any) => {
+                const cl = typeof ex.clearance_status === "string" ? JSON.parse(ex.clearance_status) : (ex.clearance_status || {});
+                const cleared = Object.values(cl).filter((v: any) => v === "cleared").length;
+                const total = Object.keys(cl).length;
+                const settlement = typeof ex.final_settlement === "string" ? JSON.parse(ex.final_settlement) : (ex.final_settlement || {});
+                return (
+                  <div key={ex.ref} className="px-5 py-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{ex.employee_name} <span className="text-gray-400 text-xs">({ex.department})</span></p>
+                        <p className="text-[10px] text-gray-400">{ex.ref} - {ex.exit_type} - Last day: {ex.last_working_day}</p>
+                      </div>
+                      <StatusBadge status={ex.status} />
+                    </div>
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-400 rounded-full" style={{width:`${total>0?(cleared/total)*100:0}%`}} />
+                      </div>
+                      <span className="text-xs text-gray-600">{cleared}/{total} cleared</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {Object.entries(cl).map(([k, v]: [string, any]) => (
+                        <button key={k} onClick={() => handleClearanceUpdate(ex.ref, k, v === "cleared" ? "pending" : "cleared")}
+                          className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${v === "cleared" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-emerald-50"}`}>
+                          {k.replace(/_/g," ")}
+                        </button>
+                      ))}
+                    </div>
+                    {settlement.total_settlement && <p className="text-[10px] text-gray-400 mt-1">Settlement: {Number(settlement.total_settlement).toLocaleString()} SAR</p>}
+                  </div>
+                );
+              })}
+              {exits.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No exit requests</div>}
+            </div>
+          </div>
+        )}
+
+        {/* REPORTS */}
+        {tab === "Reports" && reports && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard label="Headcount" value={reports.totalEmployees} color="text-gray-900" />
+              <StatCard label="Monthly Payroll" value={`${(reports.totalPayroll/1000).toFixed(0)}K SAR`} color="text-emerald-600" />
+              <StatCard label="Active Exits" value={reports.activeExits} color="text-red-600" />
+              <StatCard label="Expiring Docs (90d)" value={reports.expiringDocs} color="text-amber-600" />
+              <StatCard label="Leave Requests" value={reports.leaveStats?.total || 0} color="text-blue-600" />
+              <StatCard label="Approved Leave Days" value={reports.leaveStats?.approved || 0} color="text-emerald-600" />
+              <StatCard label="Pending Leave Days" value={reports.leaveStats?.pending || 0} color="text-amber-600" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">Dept Headcount & Cost</h3>
+                {(reports.departments || []).map((d: any) => (
+                  <div key={d.department} className="flex items-center justify-between py-1.5 border-b border-gray-50">
+                    <span className="text-xs text-gray-700">{d.department} ({d.count})</span>
+                    <span className="text-xs font-medium text-gray-900">{Number(d.cost).toLocaleString()} SAR</span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">By Nationality</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(reports.nationalities || []).map((n: any) => (
+                    <span key={n.nationality} className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium">{n.nationality}: {n.count}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => {
+              const csv = ["Department,Headcount,Monthly Cost"];
+              (reports.departments || []).forEach((d: any) => csv.push(`${d.department},${d.count},${d.cost}`));
+              const blob = new Blob([csv.join("\n")], { type: "text/csv" });
+              const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "taliq_report.csv"; a.click();
+            }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600">Export CSV</button>
           </div>
         )}
       </div>

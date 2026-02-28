@@ -83,6 +83,57 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result);
     }
 
+
+    if (section === "letters") {
+      const rows = await sql`SELECT l.*, e.name as employee_name, e.department FROM letters l JOIN employees e ON l.employee_id = e.id ORDER BY l.created_at DESC`;
+      return NextResponse.json(rows);
+    }
+
+    if (section === "contracts") {
+      const rows = await sql`SELECT c.*, e.name as employee_name, e.department, e.position FROM contracts c JOIN employees e ON c.employee_id = e.id ORDER BY c.start_date DESC`;
+      return NextResponse.json(rows);
+    }
+
+    if (section === "assets") {
+      const rows = await sql`SELECT a.*, e.name as assigned_name FROM assets a LEFT JOIN employees e ON a.assigned_to = e.id ORDER BY a.ref`;
+      return NextResponse.json(rows);
+    }
+
+    if (section === "shifts") {
+      const shifts = await sql`SELECT * FROM shifts WHERE status='active' ORDER BY start_time`;
+      const assignments = await sql`SELECT es.*, e.name, e.department, s.name as shift_name FROM employee_shifts es JOIN employees e ON es.employee_id = e.id JOIN shifts s ON es.shift_id = s.id WHERE es.end_date IS NULL ORDER BY e.name`;
+      return NextResponse.json({ shifts, assignments });
+    }
+
+    if (section === "iqama") {
+      const rows = await sql`SELECT iv.*, e.name as employee_name, e.department FROM iqama_visa iv JOIN employees e ON iv.employee_id = e.id ORDER BY iv.expiry_date`;
+      return NextResponse.json(rows);
+    }
+
+    if (section === "exits") {
+      const rows = await sql`SELECT er.*, e.name as employee_name, e.department, e.position FROM exit_requests er JOIN employees e ON er.employee_id = e.id ORDER BY er.initiated_at DESC`;
+      return NextResponse.json(rows);
+    }
+
+    if (section === "reports") {
+      const [headcount] = await sql`SELECT COUNT(*) as count FROM employees`;
+      const depts = await sql`SELECT department, COUNT(*) as count, SUM(basic_salary + housing_allowance + transport_allowance) as cost FROM employees GROUP BY department ORDER BY count DESC`;
+      const nationalities = await sql`SELECT nationality, COUNT(*) as count FROM employees GROUP BY nationality ORDER BY count DESC`;
+      const [leaveStats] = await sql`SELECT COALESCE(SUM(CASE WHEN status='approved' THEN days ELSE 0 END),0) as approved, COALESCE(SUM(CASE WHEN status='pending' THEN days ELSE 0 END),0) as pending, COUNT(*) as total FROM leave_requests`;
+      const [payroll] = await sql`SELECT SUM(basic_salary + housing_allowance + transport_allowance) as total FROM employees`;
+      const [exits] = await sql`SELECT COUNT(*) as count FROM exit_requests WHERE status IN ('initiated','in_progress')`;
+      const [expiring] = await sql`SELECT COUNT(*) as count FROM iqama_visa WHERE expiry_date <= (CURRENT_DATE + INTERVAL '90 days')::TEXT AND status != 'expired'`;
+      return NextResponse.json({
+        totalEmployees: Number(headcount.count),
+        departments: depts,
+        nationalities,
+        leaveStats: { approved: Number(leaveStats.approved), pending: Number(leaveStats.pending), total: Number(leaveStats.total) },
+        totalPayroll: Number(payroll.total || 0),
+        activeExits: Number(exits.count),
+        expiringDocs: Number(expiring.count),
+      });
+    }
+
     return NextResponse.json([]);
   } catch (e: any) {
     console.error("Admin API error:", e.message);
@@ -146,6 +197,26 @@ export async function POST(request: NextRequest) {
       const { id } = body;
       if (!id) return NextResponse.json({ error: "Announcement id required" }, { status: 400 });
       await sql`DELETE FROM announcements WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+
+    if (action === "create_employee") {
+      const { id, name, nameAr, position, department, email, phone, joinDate, grade, nationality, managerId, basicSalary, housingAllowance, transportAllowance, pin } = body;
+      if (!id || !name) return NextResponse.json({ error: "ID and name required" }, { status: 400 });
+      await sql`INSERT INTO employees (id, name, name_ar, position, department, email, phone, join_date, grade, nationality, manager_id, basic_salary, housing_allowance, transport_allowance, pin) VALUES (${id}, ${name}, ${nameAr || ""}, ${position || ""}, ${department || ""}, ${email || ""}, ${phone || ""}, ${joinDate || new Date().toISOString().split("T")[0]}, ${grade || ""}, ${nationality || "Saudi"}, ${managerId || null}, ${Number(basicSalary) || 0}, ${Number(housingAllowance) || 0}, ${Number(transportAllowance) || 0}, ${pin || "1234"})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update_clearance") {
+      const { ref, item, status } = body;
+      if (!ref || !item) return NextResponse.json({ error: "Ref and item required" }, { status: 400 });
+      const [row] = await sql`SELECT clearance_status FROM exit_requests WHERE ref = ${ref}`;
+      if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      const clearance = typeof row.clearance_status === "string" ? JSON.parse(row.clearance_status) : row.clearance_status;
+      clearance[item] = status;
+      const allCleared = Object.values(clearance).every((v: any) => v === "cleared");
+      await sql`UPDATE exit_requests SET clearance_status = ${JSON.stringify(clearance)}::jsonb, status = ${allCleared ? "cleared" : "in_progress"} WHERE ref = ${ref}`;
       return NextResponse.json({ ok: true });
     }
 
