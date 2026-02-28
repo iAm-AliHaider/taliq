@@ -437,6 +437,7 @@ def init_db():
         completed_at TIMESTAMP
     )""")
 
+    conn.commit()
 
     # Seed policies
     c.execute("SELECT COUNT(*) FROM policies")
@@ -2201,9 +2202,9 @@ def generate_letter(employee_id, letter_type, purpose=None, addressed_to=None, l
         conn.close()
         return None
 
-    c.execute("SELECT COUNT(*) FROM letters WHERE employee_id=%s", (employee_id,))
-    count = c.fetchone()[0] + 1
-    ref = f"LTR-{date.today().year}-{count:03d}"
+    c.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM letters")
+    next_id = c.fetchone()[0]
+    ref = f"LTR-{date.today().year}-{next_id:03d}"
 
     # Build content data
     content_data = {
@@ -2548,9 +2549,9 @@ def initiate_exit(employee_id, exit_type="resignation", reason=None, last_workin
         conn.close()
         return None
 
-    c.execute("SELECT COUNT(*) FROM exit_requests WHERE employee_id=%s", (employee_id,))
-    count = c.fetchone()[0] + 1
-    ref = f"EXIT-{date.today().year}-{count:03d}"
+    c.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM exit_requests")
+    next_id = c.fetchone()[0]
+    ref = f"EXIT-{date.today().year}-{next_id:03d}"
 
     if not last_working_day:
         last_working_day = str(date.today() + timedelta(days=30))
