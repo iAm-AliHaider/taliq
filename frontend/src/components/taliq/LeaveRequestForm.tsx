@@ -41,7 +41,7 @@ export function LeaveRequestForm({
   const [endDate, setEndDate] = useState(initEnd || "");
   const [reason, setReason] = useState(initReason || "");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  
 
   const s = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
 
@@ -61,7 +61,7 @@ export function LeaveRequestForm({
     if (!canSubmit) return;
     setSubmitting(true);
     onAction?.("submit_leave", { leave_type: leaveType, start_date: startDate, end_date: endDate, days, reason });
-    setTimeout(() => { setSubmitting(false); setSubmitted(true); }, 400);
+    
   };
 
   // Display mode (submitted/approved/rejected)
@@ -95,24 +95,9 @@ export function LeaveRequestForm({
     );
   }
 
-  // Success state
-  if (submitted) {
-    return (
-      <div className="card overflow-hidden animate-[scaleIn_0.25s_ease-out]">
-        <div className="p-6 text-center bg-emerald-50 border border-emerald-200 rounded-2xl">
-          <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
-            <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-          </div>
-          <p className="text-sm font-semibold text-emerald-800">Leave Request Submitted</p>
-          <p className="text-xs text-emerald-600 mt-1">{leaveType} · {days} days · {startDate} to {endDate}</p>
-        </div>
-      </div>
-    );
-  }
-
   // Interactive form mode
   return (
-    <div className="card overflow-hidden">
+    <div className={`card overflow-hidden ${submitting ? "opacity-60 pointer-events-none" : ""}`}>
       <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-800">Apply for Leave</h3>

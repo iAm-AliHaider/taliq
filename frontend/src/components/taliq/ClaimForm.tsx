@@ -8,7 +8,6 @@ export function ClaimForm({ onAction }: { onAction?: (action: string, payload: a
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const canSubmit = claimType && description && amount && Number(amount) > 0;
 
@@ -16,23 +15,10 @@ export function ClaimForm({ onAction }: { onAction?: (action: string, payload: a
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     onAction?.("submit_claim", { claim_type: claimType, description, amount: Number(amount) });
-    setTimeout(() => { setSubmitting(false); setSubmitted(true); }, 300);
   };
 
-  if (submitted) {
-    return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center animate-[scaleIn_0.25s_ease-out]">
-        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
-          <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <p className="text-sm font-semibold text-emerald-800">Claim Submitted</p>
-        <p className="text-xs text-emerald-600 mt-1">{claimType} · {Number(amount).toLocaleString()} SAR</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out]">
+    <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out] ${submitting ? "opacity-60 pointer-events-none" : ""}`}>
       <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-purple-50">
         <h3 className="text-sm font-semibold text-gray-800">Submit Claim</h3>
       </div>

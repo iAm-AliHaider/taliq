@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState } from "react";
 
 const CATEGORIES = ["travel", "meals", "supplies", "transport", "accommodation", "training", "communication", "other"];
 
@@ -10,8 +10,6 @@ export function ExpenseForm({ categories, onAction }: { categories?: string[]; o
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const formRef = useRef<HTMLDivElement>(null);
 
   const canSubmit = category && description && amount && Number(amount) > 0;
 
@@ -19,26 +17,10 @@ export function ExpenseForm({ categories, onAction }: { categories?: string[]; o
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     onAction?.("submit_expense", { category, description, amount: Number(amount), expense_date: expenseDate });
-    setTimeout(() => {
-      setSubmitting(false);
-      setSubmitted(true);
-    }, 300);
   };
 
-  if (submitted) {
-    return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center animate-[scaleIn_0.25s_ease-out]">
-        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
-          <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <p className="text-sm font-semibold text-emerald-800">Expense Submitted</p>
-        <p className="text-xs text-emerald-600 mt-1">{category} · {Number(amount).toLocaleString()} SAR</p>
-      </div>
-    );
-  }
-
   return (
-    <div ref={formRef} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out]">
+    <div className={`rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out] ${submitting ? "opacity-60 pointer-events-none" : ""}`}>
       <div className="px-5 py-3 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-amber-50">
         <h3 className="text-sm font-semibold text-gray-800">Submit Expense</h3>
       </div>
