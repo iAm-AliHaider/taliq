@@ -34,17 +34,13 @@ export default function Home() {
   const [token, setToken] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
-  
   const [authChecked, setAuthChecked] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
 
-  // Check localStorage for existing session
   useEffect(() => {
     try {
       const stored = localStorage.getItem("taliq_employee");
-      if (stored) {
-        setEmployee(JSON.parse(stored));
-      }
+      if (stored) setEmployee(JSON.parse(stored));
     } catch { /* ignore */ }
     setAuthChecked(true);
     const savedLang = getSavedLang();
@@ -52,10 +48,8 @@ export default function Home() {
     if (isRTL(savedLang)) { document.documentElement.dir = "rtl"; document.documentElement.lang = "ar"; }
   }, []);
 
-  // Fetch token once employee is set
   useEffect(() => {
     if (!employee) return;
-
     async function getToken() {
       setIsLoading(true);
       setError("");
@@ -65,7 +59,7 @@ export default function Home() {
         const resp = await fetchToken(freshRoom, identity, employee!.id, lang);
         setToken(resp.token);
       } catch {
-        setError("Failed to connect to Taliq");
+        setError(t("loading.connecting", lang));
       } finally {
         setIsLoading(false);
       }
@@ -84,7 +78,13 @@ export default function Home() {
     setToken("");
   };
 
-  // Still checking auth
+  const handleLangSwitch = (l: Lang) => {
+    setLang(l);
+    saveLang(l);
+    document.documentElement.dir = isRTL(l) ? "rtl" : "ltr";
+    document.documentElement.lang = l;
+  };
+
   if (!authChecked) {
     return (
       <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center">
@@ -93,15 +93,11 @@ export default function Home() {
     );
   }
 
-  // Not logged in — show login
-  if (!employee) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
+  if (!employee) return <LoginPage onLogin={handleLogin} />;
 
-  // Loading token
   if (isLoading || !token) {
     return (
-      <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-[#FAFBFC] flex items-center justify-center relative overflow-hidden" dir={isRTL(lang) ? "rtl" : "ltr"}>
         <AuroraBackground />
         <div className="flex flex-col items-center gap-6 z-10">
           <div className="relative w-20 h-20">
@@ -113,8 +109,8 @@ export default function Home() {
             </div>
           </div>
           <div className="text-center">
-            <p className="text-gray-500 text-sm font-medium">Welcome, {employee.name.split(" ")[0]}</p>
-            <p className="text-gray-400 text-xs mt-1">Connecting to Taliq...</p>
+            <p className="text-gray-500 text-sm font-medium">{t("loading.welcome", lang)}, {employee.name.split(" ")[0]}</p>
+            <p className="text-gray-400 text-xs mt-1">{t("loading.connecting", lang)}</p>
           </div>
         </div>
       </div>
@@ -132,14 +128,16 @@ export default function Home() {
             </svg>
           </div>
           <p className="text-red-600 text-center text-sm">{error}</p>
-          <button onClick={() => window.location.reload()} className="px-5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium hover:bg-emerald-100 transition-all">Try Again</button>
+          <button onClick={() => window.location.reload()} className="px-5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-sm text-emerald-700 font-medium hover:bg-emerald-100 transition-all">
+            {lang === "ar" ? "حاول مرة أخرى" : "Try Again"}
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#FAFBFC] flex flex-col relative">
+    <div className="min-h-[100dvh] bg-[#FAFBFC] flex flex-col relative" dir={isRTL(lang) ? "rtl" : "ltr"}>
       <AuroraBackground />
 
       {/* Header */}
@@ -153,34 +151,27 @@ export default function Home() {
               <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse-ring" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-gray-900 leading-tight">Taliq</h1>
+              <h1 className="text-base font-bold text-gray-900 leading-tight">{t("app.name", lang)}</h1>
               <p className="text-[9px] text-gray-400 tracking-widest uppercase">{employee.name}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <LanguageSwitcher lang={lang} onSwitch={(l) => { setLang(l); document.documentElement.dir = isRTL(l) ? "rtl" : "ltr"; }} />
+            <LanguageSwitcher lang={lang} onSwitch={handleLangSwitch} />
 
-            {/* Manager badge */}
             {employee.isManager && (
               <span className="px-2 py-1 rounded-lg bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
-                Manager
+                {t("header.manager", lang)}
               </span>
             )}
 
-            {/* Admin link */}
             {employee.isAdmin && (
               <a href="/admin" className="px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[10px] font-semibold text-emerald-600 hover:bg-emerald-100 transition-colors">
-                Admin Panel
+                {t("header.admin", lang)}
               </a>
             )}
 
-            {/* Logout */}
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
-              title="Sign out"
-            >
+            <button onClick={handleLogout} className="p-2 rounded-xl hover:bg-gray-100 transition-colors" title={t("header.logout", lang)}>
               <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
@@ -189,12 +180,11 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Full-screen card area */}
+      {/* Main */}
       <TaliqProvider token={token}>
         {(components, actions) => (
           <main className="relative z-10 flex-1 overflow-hidden bg-gray-50/50">
             <GenerativePanel components={components} actions={actions} />
-            {/* Floating voice agent */}
             <VoiceAgent />
           </main>
         )}

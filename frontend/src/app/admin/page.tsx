@@ -82,6 +82,15 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [editingManager, setEditingManager] = useState<string | null>(null);
   const [selectedManager, setSelectedManager] = useState("");
+  // Announcement form
+  const [showAnnForm, setShowAnnForm] = useState(false);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annContent, setAnnContent] = useState("");
+  const [annPriority, setAnnPriority] = useState("normal");
+  const [annSaving, setAnnSaving] = useState(false);
+  // Grievance actions
+  const [grievanceAction, setGrievanceAction] = useState<string | null>(null);
+  const [grievanceResolution, setGrievanceResolution] = useState("");
   
 
   useEffect(() => {
@@ -138,6 +147,38 @@ export default function AdminPage() {
     });
     setEditingPolicy(null);
     setSavingPolicy(false);
+    loadData();
+  };
+
+  const handleCreateAnnouncement = async () => {
+    if (!annTitle.trim() || !annContent.trim()) return;
+    setAnnSaving(true);
+    await adminFetch("?action=create_announcement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: annTitle, content: annContent, author: "Admin", priority: annPriority }),
+    });
+    setAnnTitle(""); setAnnContent(""); setAnnPriority("normal"); setShowAnnForm(false); setAnnSaving(false);
+    loadData();
+  };
+
+  const handleDeleteAnnouncement = async (id: number) => {
+    if (!confirm("Delete this announcement?")) return;
+    await adminFetch("?action=delete_announcement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    loadData();
+  };
+
+  const handleGrievanceAction = async (ref: string, action: string, resolution?: string, assignedTo?: string) => {
+    await adminFetch("?action=resolve_grievance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ref, status: action, resolution, assignedTo }),
+    });
+    setGrievanceAction(null); setGrievanceResolution("");
     loadData();
   };
 

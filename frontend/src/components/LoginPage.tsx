@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Lang, t, getSavedLang, saveLang, isRTL } from "@/lib/i18n";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 interface Employee {
   id: string;
@@ -30,13 +32,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lang, setLang] = useState<Lang>("en");
 
   useEffect(() => {
+    setLang(getSavedLang());
     fetch("/api/auth")
       .then((res) => res.json())
       .then(setEmployees)
       .catch(console.error);
   }, []);
+
+  const switchLang = (l: Lang) => {
+    setLang(l);
+    saveLang(l);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,14 +61,14 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Authentication failed");
+        setError(data.error || t("auth.invalid", lang));
         return;
       }
 
       const employee = await res.json();
       onLogin({ ...employee, isManager: employee.isManager });
     } catch {
-      setError("Connection error");
+      setError(t("auth.invalid", lang));
     } finally {
       setLoading(false);
     }
@@ -72,8 +81,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#FAFBFC] flex flex-col relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-[#FAFBFC] flex flex-col relative overflow-hidden" dir={isRTL(lang) ? "rtl" : "ltr"}>
       <AuroraBackground />
+
+      {/* Language switcher top-right */}
+      <div className="absolute top-4 right-4 z-20">
+        <LanguageSwitcher lang={lang} onSwitch={switchLang} />
+      </div>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-sm">
@@ -81,20 +95,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/20 mb-4">
               <span className="text-white text-2xl font-bold">ت</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Welcome to Taliq</h1>
-            <p className="text-sm text-gray-500 mt-1">Voice-First HR Platform</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t("auth.title", lang)}</h1>
+            <p className="text-sm text-gray-500 mt-1">{t("auth.subtitle", lang)}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">Employee</label>
+              <label className="block text-xs font-medium text-gray-600 mb-2">{t("auth.select_employee", lang)}</label>
               <select
                 value={selectedEmployee}
                 onChange={(e) => setSelectedEmployee(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 required
               >
-                <option value="">Select your profile</option>
+                <option value="">{t("auth.select_employee", lang)}</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name} - {emp.position}
@@ -104,13 +118,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-2">PIN Code</label>
+              <label className="block text-xs font-medium text-gray-600 mb-2">{t("auth.enter_pin", lang)}</label>
               <input
                 type="password"
                 inputMode="numeric"
                 value={pin}
                 onChange={(e) => handlePinChange(e.target.value)}
-                placeholder="Enter 4-digit PIN"
+                placeholder={t("auth.enter_pin", lang)}
                 className="w-full px-4 py-4 rounded-xl border border-gray-200 bg-white text-gray-900 text-center text-xl tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 maxLength={4}
                 required
@@ -128,13 +142,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               disabled={loading || !selectedEmployee || pin.length !== 4}
               className="w-full py-4 rounded-xl bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-500/25 hover:bg-emerald-600 hover:shadow-emerald-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? t("auth.logging_in", lang) : t("auth.login", lang)}
             </button>
           </form>
-
-          <p className="text-center text-xs text-gray-400 mt-6">
-            Default PINs: 1234, 2345, 3456, 4567, 5678, 6789, 7890
-          </p>
         </div>
       </div>
     </div>

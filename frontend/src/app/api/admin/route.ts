@@ -51,45 +51,27 @@ export async function GET(request: NextRequest) {
 
     if (section === "leaves") {
       const rows = await sql`SELECT lr.*, e.name as employee_name, e.department, m.name as approver_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id LEFT JOIN employees m ON lr.approver_id = m.id ORDER BY lr.created_at DESC`;
-      return NextResponse.json(rows.map((r: any) => ({
-        ref: r.ref, employeeId: r.employee_id, employeeName: r.employee_name, department: r.department,
-        leaveType: r.leave_type, startDate: r.start_date, endDate: r.end_date, days: r.days,
-        reason: r.reason, status: r.status, approverId: r.approver_id, approverName: r.approver_name,
-      })));
+      return NextResponse.json(rows);
     }
 
     if (section === "loans") {
       const rows = await sql`SELECT l.*, e.name as employee_name, e.department FROM loans l JOIN employees e ON l.employee_id = e.id ORDER BY l.created_at DESC`;
-      return NextResponse.json(rows.map((r: any) => ({
-        ref: r.ref, employeeId: r.employee_id, employeeName: r.employee_name, department: r.department,
-        loanType: r.loan_type, amount: Number(r.amount), remaining: Number(r.remaining),
-        monthlyInstallment: Number(r.monthly_installment), installmentsLeft: r.installments_left, status: r.status,
-      })));
+      return NextResponse.json(rows);
     }
 
     if (section === "documents") {
       const rows = await sql`SELECT d.*, e.name as employee_name FROM document_requests d JOIN employees e ON d.employee_id = e.id ORDER BY d.created_at DESC`;
-      return NextResponse.json(rows.map((r: any) => ({
-        ref: r.ref, employeeId: r.employee_id, employeeName: r.employee_name,
-        documentType: r.document_type, status: r.status, estimatedDate: r.estimated_date,
-      })));
+      return NextResponse.json(rows);
     }
 
     if (section === "announcements") {
       const rows = await sql`SELECT * FROM announcements ORDER BY created_at DESC`;
-      return NextResponse.json(rows.map((r: any) => ({
-        id: r.id, title: r.title, content: r.content, author: r.author, priority: r.priority, date: r.created_at,
-      })));
+      return NextResponse.json(rows);
     }
 
     if (section === "grievances") {
       const rows = await sql`SELECT g.*, e.name as employee_name, e.department FROM grievances g JOIN employees e ON g.employee_id = e.id ORDER BY g.submitted_at DESC`;
-      return NextResponse.json(rows.map((r: any) => ({
-        ref: r.ref, employeeId: r.employee_id, employeeName: r.employee_name, department: r.department,
-        category: r.category, subject: r.subject, description: r.description, severity: r.severity,
-        status: r.status, assignedTo: r.assigned_to, resolution: r.resolution,
-        submittedAt: r.submitted_at, resolvedAt: r.resolved_at,
-      })));
+      return NextResponse.json(rows);
     }
 
     if (section === "policies") {
@@ -140,9 +122,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    if (action === "create_policy") {
-      const { category, config } = body;
-      await sql`INSERT INTO policies (category, config, updated_by) VALUES (${category}, ${JSON.stringify(config)}::jsonb, 'admin') ON CONFLICT (category) DO UPDATE SET config = ${JSON.stringify(config)}::jsonb, updated_at = NOW()`;
+    if (action === "create_announcement") {
+      const { title, content, author, priority } = body;
+      if (!title || !content) return NextResponse.json({ error: "Title and content required" }, { status: 400 });
+      await sql`INSERT INTO announcements (title, content, author, priority) VALUES (${title}, ${content}, ${author || "Admin"}, ${priority || "normal"})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "resolve_grievance") {
+      const { ref, status, resolution, assignedTo } = body;
+      if (!ref) return NextResponse.json({ error: "Grievance ref required" }, { status: 400 });
+      if (status === "resolved" || status === "closed") {
+        await sql`UPDATE grievances SET status = ${status}, resolution = ${resolution || ""}, resolved_at = NOW() WHERE ref = ${ref}`;
+      } else if (assignedTo) {
+        await sql`UPDATE grievances SET assigned_to = ${assignedTo}, status = 'investigating' WHERE ref = ${ref}`;
+      } else {
+        await sql`UPDATE grievances SET status = ${status || "investigating"} WHERE ref = ${ref}`;
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_announcement") {
+      const { id } = body;
+      if (!id) return NextResponse.json({ error: "Announcement id required" }, { status: 400 });
+      await sql`DELETE FROM announcements WHERE id = ${id}`;
       return NextResponse.json({ ok: true });
     }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { ComponentItem, TaliqActions } from "./TaliqProvider";
+import { Lang, t, getSavedLang } from "@/lib/i18n";
 import { LeaveBalanceCard } from "./taliq/LeaveBalanceCard";
 import { LeaveRequestForm } from "./taliq/LeaveRequestForm";
 import { EmployeeProfileCard } from "./taliq/EmployeeProfileCard";
@@ -84,6 +85,7 @@ interface Props {
 
 export function GenerativePanel({ components, actions }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lang: Lang = typeof window !== "undefined" ? getSavedLang() : "en";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -91,21 +93,24 @@ export function GenerativePanel({ components, actions }: Props) {
     }
   }, [components]);
 
+  const tags = [
+    t("tag.leave", lang), t("tag.payroll", lang), t("tag.loans", lang),
+    t("tag.travel", lang), t("tag.documents", lang), t("tag.attendance", lang),
+  ];
+
   if (components.length === 0) {
     return (
       <div className="h-full flex flex-col items-center justify-center p-8">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center">
           <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-            <span className="text-2xl font-bold text-emerald-600">T</span>
+            <span className="text-2xl font-bold text-emerald-600">ت</span>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-800 mb-1">HR Dashboard</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Ask Taliq anything or tap a quick action. Interactive cards appear here - approve requests, view details, track workflows.
-            </p>
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">{t("panel.hr_dashboard", lang)}</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">{t("panel.ask_taliq", lang)}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-1.5 mt-2">
-            {["Leave", "Payroll", "Loans", "Travel", "Documents", "Attendance"].map(tag => (
+            {tags.map(tag => (
               <span key={tag} className="px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-[10px] text-gray-400 font-medium">{tag}</span>
             ))}
           </div>
@@ -118,7 +123,7 @@ export function GenerativePanel({ components, actions }: Props) {
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200/80 flex items-center justify-between" style={{ background: "rgba(250,251,252,0.85)", backdropFilter: "blur(20px)" }}>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-gray-700">Active</span>
+          <span className="text-xs font-semibold text-gray-700">{t("panel.active", lang)}</span>
           <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] text-emerald-600 font-bold">{components.length}</span>
         </div>
       </div>
