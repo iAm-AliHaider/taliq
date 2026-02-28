@@ -406,29 +406,67 @@ async def show_my_profile(context: RunContext):
 
 @function_tool()
 async def show_pay_slip(context: RunContext, month: str = "February 2026"):
-    """Show pay slip."""
+    """Show comprehensive salary breakdown with earnings, deductions, loan EMIs, GOSI, and YTD."""
     emp = db.get_employee(get_current_employee_id_from_context())
     if not emp:
         return "Not found."
     sal = emp["salary"]
-    gosi = int(sal["basic"] * 0.0975)
-    net = sal["total"] - gosi
+    gosi_rate = 9.75
+    gosi_amount = round(sal["basic"] * gosi_rate / 100, 2)
+    gross = sal["total"]
+
+    # Get active loan EMIs
+    loans = db.get_employee_loans(get_current_employee_id_from_context())
+    loan_deductions = []
+    total_loan_emi = 0
+    for loan in loans:
+        if loan.get("status") == "active" and loan.get("monthly_emi"):
+            emi = loan["monthly_emi"]
+            loan_deductions.append({
+                "ref": loan.get("ref", ""),
+                "type": loan.get("loan_type", "Loan"),
+                "emi": emi,
+                "remaining": loan.get("remaining_amount", 0),
+            })
+            total_loan_emi += emi
+
+    total_deductions = gosi_amount + total_loan_emi
+    net_pay = gross - total_deductions
+
+    # Estimate YTD (current month number)
+    import datetime
+    month_num = datetime.datetime.now().month
+    ytd_gross = gross * month_num
+    ytd_deductions = total_deductions * month_num
+    ytd_net = net_pay * month_num
+
     await _send_ui(
-        "PaySlipCard",
+        "SalaryBreakdownCard",
         {
             "employeeName": emp["name"],
+            "employeeId": emp["id"],
+            "position": emp["position"],
+            "department": emp["department"],
+            "grade": str(emp.get("grade", "")),
             "month": month,
             "basic": sal["basic"],
             "housing": sal["housing"],
             "transport": sal["transport"],
-            "deductions": gosi,
-            "gosiDeduction": gosi,
-            "netPay": net,
+            "gosiRate": gosi_rate,
+            "gosiAmount": gosi_amount,
+            "loanDeductions": loan_deductions,
+            "totalLoanDeduction": total_loan_emi,
+            "grossPay": gross,
+            "totalDeductions": total_deductions,
+            "netPay": net_pay,
             "currency": "SAR",
+            "ytdGross": ytd_gross,
+            "ytdDeductions": ytd_deductions,
+            "ytdNet": ytd_net,
         },
         "main_card",
     )
-    return f"Net: {net:,} SAR after {gosi:,} GOSI."
+    return f"Salary breakdown for {month}: Gross {gross:,.0f} SAR, Deductions {total_deductions:,.0f} SAR (GOSI {gosi_amount:,.0f} + Loans {total_loan_emi:,.0f}), Net {net_pay:,.0f} SAR."
 
 
 @function_tool()
