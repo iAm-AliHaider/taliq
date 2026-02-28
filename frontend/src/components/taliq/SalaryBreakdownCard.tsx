@@ -1,5 +1,7 @@
 "use client";
 
+import { generatePayslipPDF } from "@/lib/pdf";
+
 import { useState } from "react";
 
 interface LoanDeduction {
@@ -181,7 +183,7 @@ export function SalaryBreakdownCard({
               {iban && <InfoRow label="IBAN" value={`${iban.slice(0, 6)}****${iban.slice(-4)}`} />}
               <InfoRow label="Grade" value={grade} />
             </div>
-            <button onClick={() => onAction?.("download_payslip", { month })}
+            <button onClick={() => generatePayslipPDF({ employeeName, employeeId, position, department, month, basic, housing, transport, grossPay, gosiAmount, totalLoanDeduction, totalDeductions, netPay, currency })}
               className="w-full mt-2 py-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold hover:bg-blue-100 active:scale-[0.98] transition-all">
               Download Pay Slip PDF
             </button>

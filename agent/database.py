@@ -1243,7 +1243,7 @@ def create_document_request(emp_id, doc_type):
     c.execute("SELECT COUNT(*) FROM document_requests")
     count = c.fetchone()[0]
     ref = f"DOC-2026-{count + 1:03d}"
-    est = str(date.today() + timedelta(days=2))
+    est = str(date.today() + timedelta(days=get_policy("documents.processing_days", 2)))
     c.execute("INSERT INTO document_requests (ref, employee_id, document_type, status, estimated_date) VALUES (%s,%s,%s,%s,%s)",
         (ref, emp_id, doc_type, "requested", est))
     conn.commit()
@@ -1295,6 +1295,11 @@ def check_loan_eligibility(emp_id):
 
 
 def create_loan(emp_id, loan_type, amount, months):
+    _max_concurrent = get_policy("loan.max_concurrent_loans", 1)
+    _existing_loans = get_employee_loans(emp_id)
+    _active_loans = [l for l in _existing_loans if l.get("status") in ("active", "pending")]
+    if len(_active_loans) >= _max_concurrent:
+        return {"error": f"Max {_max_concurrent} concurrent loan(s). You have {len(_active_loans)} active."}
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM loans")
@@ -2127,6 +2132,13 @@ def create_expense(employee_id, category, description, amount, expense_date, rec
         (ref, employee_id, category, description, amount, expense_date, receipt_ref, approver_id))
     conn.commit()
     conn.close()
+    _auto_t = get_policy("expenses.auto_approve_below", 0)
+    if _auto_t and amount <= _auto_t:
+        _conn2 = get_db()
+        _c2 = _conn2.cursor()
+        _c2.execute("UPDATE expenses SET status = %s WHERE ref = %s", ("approved", ref))
+        _conn2.commit()
+        _conn2.close()
     _create_notification(employee_id, "expense", "Expense Submitted", f"Your expense {ref} for {amount} SAR has been submitted.")
     return {"ref": ref, "amount": amount, "category": category, "status": "pending"}
 
@@ -2718,17 +2730,17 @@ def initiate_exit(employee_id, exit_type="resignation", reason=None, last_workin
     ref = f"EXIT-{date.today().year}-{next_id:03d}"
 
     if not last_working_day:
-        last_working_day = str(date.today() + timedelta(days=30))
+        _notice_days = get_policy("probation.notice_unlimited", 60)
+        last_working_day = str(date.today() + timedelta(days=_notice_days))
 
     # Clearance checklist
-    clearance = {
-        "it_assets": "pending",
-        "access_cards": "pending",
-        "finance_clearance": "pending",
-        "hr_documents": "pending",
-        "knowledge_transfer": "pending",
-        "manager_signoff": "pending",
-    }
+    _clearance_depts = get_policy("exit.clearance_departments", ["IT", "Finance", "HR", "Admin", "Security"])
+    _checklist = get_policy("exit.asset_return_checklist", ["Laptop", "ID Card", "Access Card"])
+    clearance = {}
+    for dept in _clearance_depts:
+        clearance[dept.lower().replace(" ", "_") + "_clearance"] = "pending"
+    clearance["knowledge_transfer"] = "pending"
+    clearance["manager_signoff"] = "pending" 
 
     # Calculate final settlement
     eos = calculate_end_of_service(employee_id, exit_type)

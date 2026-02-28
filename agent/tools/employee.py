@@ -295,7 +295,8 @@ async def apply_for_leave(
     if not emp:
         return "Employee not found."
     bal = emp["leave_balance"].get(leave_type, 0)
-    if days > bal:
+    _allow_negative = db.get_policy("leave.allow_negative_balance", False)
+    if days > bal and not _allow_negative:
         await _send_ui(
             "StatusBanner",
             {"message": f"Insufficient {leave_type} leave ({bal} left).", "type": "error"},

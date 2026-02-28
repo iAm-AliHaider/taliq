@@ -3,6 +3,75 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import SettingsPanel from "./settings";
+import dynamic from "next/dynamic";
+const RechartsBarChart = dynamic(() => import("recharts").then(m => {
+  const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } = m;
+  return function ChartPanel({ departments, nationalities, leaveStats }: any) {
+    const COLORS = ["#10B981","#3B82F6","#F59E0B","#EF4444","#8B5CF6","#EC4899","#14B8A6","#F97316"];
+    const deptData = (departments || []).map((d: any) => ({ name: d.department, headcount: Number(d.count), cost: Math.round(Number(d.cost)/1000) }));
+    const natData = (nationalities || []).map((n: any, i: number) => ({ name: n.nationality, value: Number(n.count), color: COLORS[i % COLORS.length] }));
+    const leaveData = leaveStats ? [
+      { name: "Approved", value: Number(leaveStats.approved), color: "#10B981" },
+      { name: "Pending", value: Number(leaveStats.pending), color: "#F59E0B" },
+      { name: "Rejected", value: Math.max(0, Number(leaveStats.total) - Number(leaveStats.approved) - Number(leaveStats.pending)), color: "#EF4444" },
+    ].filter(d => d.value > 0) : [];
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Headcount by Department</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={deptData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+              <Bar dataKey="headcount" radius={[6,6,0,0]}>
+                {deptData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Monthly Payroll by Dept (K SAR)</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={deptData} margin={{ left: -10, right: 10, top: 5, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
+              <YAxis tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12 }} formatter={(v: any) => `${v}K SAR`} />
+              <Bar dataKey="cost" radius={[6,6,0,0]} fill="#10B981">
+                {deptData.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} opacity={0.7} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">By Nationality</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={natData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }: any) => `${name} (${value})`} labelLine={false}>
+                {natData.map((d: any, i: number) => <Cell key={i} fill={d.color} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">Leave Status Distribution</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={leaveData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }: any) => `${name}: ${value}d`} labelLine={false}>
+                {leaveData.map((d: any, i: number) => <Cell key={i} fill={d.color} />)}
+              </Pie>
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    );
+  };
+}), { ssr: false, loading: () => <div className="h-[220px] flex items-center justify-center text-gray-400 text-sm">Loading charts...</div> });
 
 async function adminFetch(params: string, options?: RequestInit): Promise<any> {
   try {
@@ -754,25 +823,7 @@ export default function AdminPage() {
               <StatCard label="Approved Leave Days" value={reports.leaveStats?.approved || 0} color="text-emerald-600" />
               <StatCard label="Pending Leave Days" value={reports.leaveStats?.pending || 0} color="text-amber-600" />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">Dept Headcount & Cost</h3>
-                {(reports.departments || []).map((d: any) => (
-                  <div key={d.department} className="flex items-center justify-between py-1.5 border-b border-gray-50">
-                    <span className="text-xs text-gray-700">{d.department} ({d.count})</span>
-                    <span className="text-xs font-medium text-gray-900">{Number(d.cost).toLocaleString()} SAR</span>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">By Nationality</h3>
-                <div className="flex flex-wrap gap-2">
-                  {(reports.nationalities || []).map((n: any) => (
-                    <span key={n.nationality} className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium">{n.nationality}: {n.count}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <RechartsBarChart departments={reports.departments} nationalities={reports.nationalities} leaveStats={reports.leaveStats} />
             <button onClick={() => {
               const csv = ["Department,Headcount,Monthly Cost"];
               (reports.departments || []).forEach((d: any) => csv.push(`${d.department},${d.count},${d.cost}`));
