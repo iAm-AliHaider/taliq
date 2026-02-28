@@ -1960,8 +1960,8 @@ async def _handle_data(data: rtc.DataPacket):
         action_map = {
             # Form submissions from interactive cards
             # Expense form
-            "submit_expense": lambda d: f"Submit expense: {d.get('category','')} - {d.get('description','')} - {d.get('amount',0)} SAR on {d.get('expense_date','')}",
-            "submit_claim": lambda d: f"Submit claim: {d.get('claim_type','')} - {d.get('description','')} - {d.get('amount',0)} SAR",
+            "submit_expense": lambda: f"Submit expense: {msg.get('category','')} - {msg.get('description','')} - {msg.get('amount',0)} SAR on {msg.get('expense_date','')}",
+            "submit_claim": lambda: f"Submit claim: {msg.get('claim_type','')} - {msg.get('description','')} - {msg.get('amount',0)} SAR",
             "submit_leave": lambda: f"Submit leave request: {msg.get('leave_type', 'annual')} leave from {msg.get('start_date', '')} to {msg.get('end_date', '')}, {msg.get('days', 0)} days, reason: {msg.get('reason', 'personal')}",
             "submit_loan": lambda: f"Apply for {msg.get('loan_type', 'Interest-Free')} loan of {msg.get('amount', 0)} SAR over {msg.get('months', 12)} months",
             "submit_document_request": lambda: f"Request a {msg.get('document_type', 'Salary Certificate')}",
@@ -2018,11 +2018,11 @@ async def entrypoint(ctx: JobContext):
 
     session = AgentSession(
         vad=silero.VAD.load(
-            min_silence_duration=0.8,
-            activation_threshold=0.25,
+            min_silence_duration=0.4,
+            activation_threshold=0.3,
             prefix_padding_duration=0.3,
         ),
-        stt=deepgram.STT(model="nova-3", language="ar" if lang == "ar" else "en"),
+        stt=deepgram.STT(model="nova-3", language="ar" if lang == "ar" else "en", smart_format=True, no_delay=True, punctuate=True, interim_results=True),
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=EdgeTTS(voice="ar-SA-HamedNeural") if lang == "ar" else openai.TTS(
             model="speaches-ai/Kokoro-82M-v1.0-ONNX",
@@ -2031,8 +2031,8 @@ async def entrypoint(ctx: JobContext):
             api_key="not-needed",
         ),
         allow_interruptions=True,
-        min_endpointing_delay=0.3,
-        max_endpointing_delay=2.5,
+        min_endpointing_delay=0.15,
+        max_endpointing_delay=1.2,
         min_interruption_duration=0.08,
     )
     _session_ref = session

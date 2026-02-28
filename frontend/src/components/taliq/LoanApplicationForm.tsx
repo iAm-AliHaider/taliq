@@ -21,6 +21,7 @@ export function LoanApplicationForm({ employeeName, eligible, maxAmount, currenc
   const [amount, setAmount] = useState(0);
   const [months, setMonths] = useState(12);
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const fmt = (n: number) => n.toLocaleString();
   const monthly = months > 0 && amount > 0 ? Math.round(amount / months) : 0;
@@ -32,6 +33,7 @@ export function LoanApplicationForm({ employeeName, eligible, maxAmount, currenc
     if (!canSubmit) return;
     setSubmitting(true);
     onAction?.("submit_loan", { loan_type: loanType, amount, months });
+    setTimeout(() => { setSubmitting(false); setSubmitted(true); }, 400);
   };
 
   if (!eligible) {
