@@ -582,7 +582,8 @@ def get_all_policies():
 
 
 def calculate_gosi(employee_id: str):
-    """Calculate GOSI contributions for an employee based on policy."""
+    """Calculate GOSI contributions per Saudi regulations (existing & new system)."""
+    from datetime import datetime, date
     emp = get_employee(employee_id)
     if not emp:
         return None
@@ -591,45 +592,137 @@ def calculate_gosi(employee_id: str):
     
     basic = sal["basic"]
     housing = sal["housing"]
-    insurable = min(basic + housing, policy.get("max_insurable_salary", 45000))
+    contribution_base = basic + housing
+    min_ins = policy.get("min_insurable_salary", 1500)
+    max_ins = policy.get("max_insurable_salary", 45000)
+    insurable = max(min(contribution_base, max_ins), min_ins)
     
     nationality = emp.get("nationality", "Saudi")
     is_saudi = "saudi" in nationality.lower()
+    is_gcc = any(c in nationality.lower() for c in ["bahrain", "kuwait", "oman", "qatar", "uae", "emirati"])
+    
+    # Determine if new system (joined after Jul 3, 2024)
+    join_date = emp.get("join_date", "2020-01-01")
+    if isinstance(join_date, str):
+        join_dt = datetime.strptime(join_date, "%Y-%m-%d").date()
+    else:
+        join_dt = join_date
+    new_system = join_dt > date(2024, 7, 3)
+    
+    if is_gcc:
+        # GCC nationals follow home country regulations
+        return {
+            "employee_id": employee_id, "name": emp["name"], "nationality": nationality,
+            "is_saudi": False, "is_gcc": True,
+            "note": "GCC nationals follow home country social security regulations",
+            "basic_salary": basic, "housing_allowance": housing,
+            "insurable_salary": insurable,
+            "employee_contribution": 0, "employer_contribution": 0,
+            "total_contribution": 0, "employee_rate": 0, "employer_rate": 0,
+            "breakdown": {}, "annual_employee": 0, "annual_employer": 0, "annual_total": 0,
+            "system": "gcc_home_country", "new_system": False,
+        }
     
     if is_saudi:
-        emp_rate = policy.get("employee_rate", 9.75) / 100
-        er_rate = policy.get("employer_rate", 11.75) / 100
-        emp_contribution = round(insurable * emp_rate, 2)
-        er_contribution = round(insurable * er_rate, 2)
+        if new_system:
+            emp_rate_pct = policy.get("new_employee_rate", 10.25)
+            er_rate_pct = policy.get("new_employer_rate", 12.25)
+            system_label = "New System (post Jul 2024)"
+        else:
+            emp_rate_pct = policy.get("employee_rate", 9.75)
+            er_rate_pct = policy.get("employer_rate", 11.75)
+            system_label = "Existing System (pre Jul 2024)"
+        
+        emp_contribution = round(insurable * emp_rate_pct / 100, 2)
+        er_contribution = round(insurable * er_rate_pct / 100, 2)
+        
+        # Detailed breakdown
+        annuities_emp = policy.get("annuities_employee", 9.0)
+        annuities_er = policy.get("annuities_employer", 9.0)
+        saned_emp = policy.get("saned_employee", 0.75)
+        saned_er = policy.get("saned_employer", 0.75)
+        occ_hazards = policy.get("occupational_hazards_employer", 2.0)
+        
+        if new_system:
+            # New system adds 0.5% each to annuities per year from Jul 2025
+            annuities_emp = emp_rate_pct - saned_emp
+            annuities_er = er_rate_pct - saned_er - occ_hazards
+        
         breakdown = {
-            "annuities_employee": round(insurable * policy.get("annuities_employee", 9.75) / 100, 2),
-            "annuities_employer": round(insurable * policy.get("annuities_employer", 9.0) / 100, 2),
-            "occupational_hazards": round(insurable * policy.get("occupational_hazards_employer", 2.0) / 100, 2),
-            "saned": round(insurable * policy.get("saned_employer", 0.75) / 100, 2),
+            "annuities_employee": round(insurable * annuities_emp / 100, 2),
+            "annuities_employer": round(insurable * annuities_er / 100, 2),
+            "saned_employee": round(insurable * saned_emp / 100, 2),
+            "saned_employer": round(insurable * saned_er / 100, 2),
+            "occupational_hazards": round(insurable * occ_hazards / 100, 2),
+        }
+        breakdown["total_employee"] = breakdown["annuities_employee"] + breakdown["saned_employee"]
+        breakdown["total_employer"] = breakdown["annuities_employer"] + breakdown["saned_employer"] + breakdown["occupational_hazards"]
+    else:
+        # Non-Saudi: employer pays occupational hazards only
+        emp_rate_pct = 0
+        er_rate_pct = policy.get("non_saudi_employer_rate", 2.0)
+        emp_contribution = 0
+        er_contribution = round(insurable * er_rate_pct / 100, 2)
+        system_label = "Non-Saudi (Occupational Hazards Only)"
+        breakdown = {
+            "occupational_hazards": er_contribution,
+            "total_employee": 0,
+            "total_employer": er_contribution,
+        }
+    
+    # Compliance info
+    compliance = {
+        "payment_due_day": policy.get("payment_due_day", 15),
+        "late_penalty_pct": policy.get("late_payment_penalty_pct", 2),
+        "registration_deadline_days": policy.get("registration_deadline_days", 15),
+        "portal": policy.get("portal_url", "https://www.gosi.gov.sa"),
+        "regulatory_body": policy.get("regulatory_body", "GOSI"),
+    }
+    
+    # Benefits info for Saudis
+    benefits = {}
+    if is_saudi:
+        benefits = {
+            "retirement_age": policy.get("retirement_age_male", 60),
+            "min_months_pension": policy.get("min_contribution_months_pension", 120),
+            "min_months_early_retirement": policy.get("min_contribution_months_early", 300),
+            "disability_min_months": policy.get("disability_pension_min_months", 12),
+            "coverage": ["Retirement Pension", "Disability", "Death Benefits", "Occupational Hazards", "SANED Unemployment"],
         }
     else:
-        non_saudi_rate = policy.get("non_saudi_rate", 2.0) / 100
-        emp_contribution = 0
-        er_contribution = round(insurable * non_saudi_rate, 2)
-        breakdown = {"occupational_hazards": er_contribution}
+        benefits = {
+            "coverage": ["Occupational Hazards"],
+        }
+    
+    # Rate schedule for new system
+    rate_schedule = policy.get("rate_schedule", {})
     
     return {
         "employee_id": employee_id,
         "name": emp["name"],
         "nationality": nationality,
         "is_saudi": is_saudi,
+        "is_gcc": False,
+        "new_system": new_system,
+        "system": system_label,
         "basic_salary": basic,
         "housing_allowance": housing,
         "insurable_salary": insurable,
+        "min_insurable": min_ins,
+        "max_insurable": max_ins,
         "employee_contribution": emp_contribution,
         "employer_contribution": er_contribution,
         "total_contribution": emp_contribution + er_contribution,
-        "employee_rate": policy.get("employee_rate", 9.75) if is_saudi else 0,
-        "employer_rate": policy.get("employer_rate", 11.75) if is_saudi else policy.get("non_saudi_rate", 2.0),
+        "employee_rate": emp_rate_pct,
+        "employer_rate": er_rate_pct,
+        "total_rate": emp_rate_pct + er_rate_pct,
         "breakdown": breakdown,
         "annual_employee": emp_contribution * 12,
         "annual_employer": er_contribution * 12,
         "annual_total": (emp_contribution + er_contribution) * 12,
+        "compliance": compliance,
+        "benefits": benefits,
+        "rate_schedule": rate_schedule,
     }
 
 

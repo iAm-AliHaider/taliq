@@ -1861,7 +1861,7 @@ async def show_all_payments_admin(ctx: RunContext) -> str:
 
 @function_tool
 async def show_gosi_breakdown(ctx: RunContext) -> str:
-    """Show GOSI social insurance breakdown for the employee."""
+    """Show GOSI social insurance breakdown with full Saudi compliance details."""
     emp_id = get_current_employee_id_from_context()
     gosi = db.calculate_gosi(emp_id)
     if not gosi:
@@ -1871,20 +1871,30 @@ async def show_gosi_breakdown(ctx: RunContext) -> str:
         "employeeId": emp_id,
         "nationality": gosi["nationality"],
         "isSaudi": gosi["is_saudi"],
+        "isGcc": gosi.get("is_gcc", False),
+        "newSystem": gosi.get("new_system", False),
+        "system": gosi.get("system", ""),
         "basicSalary": gosi["basic_salary"],
         "housingAllowance": gosi["housing_allowance"],
         "insurableSalary": gosi["insurable_salary"],
+        "minInsurable": gosi.get("min_insurable", 1500),
+        "maxInsurable": gosi.get("max_insurable", 45000),
         "employeeContribution": gosi["employee_contribution"],
         "employerContribution": gosi["employer_contribution"],
         "totalContribution": gosi["total_contribution"],
         "employeeRate": gosi["employee_rate"],
         "employerRate": gosi["employer_rate"],
+        "totalRate": gosi.get("total_rate", 0),
         "breakdown": gosi["breakdown"],
         "annualEmployee": gosi["annual_employee"],
         "annualEmployer": gosi["annual_employer"],
         "annualTotal": gosi["annual_total"],
+        "compliance": gosi.get("compliance", {}),
+        "benefits": gosi.get("benefits", {}),
+        "rateSchedule": gosi.get("rate_schedule", {}),
     }, "gosi_card")
-    return f"GOSI: You pay {gosi['employee_contribution']:,.0f} SAR/month ({gosi['employee_rate']}%). Employer pays {gosi['employer_contribution']:,.0f} SAR/month."
+    system = gosi.get("system", "")
+    return f"GOSI ({system}): You pay {gosi['employee_contribution']:,.0f} SAR/month ({gosi['employee_rate']}%). Employer pays {gosi['employer_contribution']:,.0f} SAR/month. Total: {gosi['total_contribution']:,.0f} SAR."
 
 @function_tool
 async def show_end_of_service(ctx: RunContext, reason: str = "termination") -> str:
