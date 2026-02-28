@@ -39,6 +39,13 @@ import EmployeeDetailCard from "./taliq/EmployeeDetailCard";
 import LeaveAnalyticsCard from "./taliq/LeaveAnalyticsCard";
 import HeadcountCard from "./taliq/HeadcountCard";
 import MyRequestsCard from "./taliq/MyRequestsCard";
+import { ExpenseListCard } from "./taliq/ExpenseListCard";
+import { ExpenseForm } from "./taliq/ExpenseForm";
+import { ExpenseApprovalCard } from "./taliq/ExpenseApprovalCard";
+import { ClaimListCard } from "./taliq/ClaimListCard";
+import { ClaimForm } from "./taliq/ClaimForm";
+import { ClaimApprovalCard } from "./taliq/ClaimApprovalCard";
+import PaymentListCard from "./taliq/PaymentListCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -76,6 +83,13 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveAnalyticsCard,
   HeadcountCard,
   MyRequestsCard,
+  ExpenseListCard,
+  ExpenseForm,
+  ExpenseApprovalCard,
+  ClaimListCard,
+  ClaimForm,
+  ClaimApprovalCard,
+  PaymentListCard,
 };
 
 interface Props {

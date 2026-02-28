@@ -269,6 +269,59 @@ def init_db():
     )""")
 
 
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        category TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        currency TEXT DEFAULT 'SAR',
+        receipt_ref TEXT,
+        expense_date TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        approver_id TEXT,
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS claims (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        claim_type TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        supporting_doc TEXT,
+        status TEXT DEFAULT 'pending',
+        approver_id TEXT,
+        approved_amount REAL,
+        payment_ref TEXT,
+        submitted_at TIMESTAMP DEFAULT NOW(),
+        processed_at TIMESTAMP
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        payment_type TEXT NOT NULL,
+        description TEXT,
+        amount REAL NOT NULL,
+        currency TEXT DEFAULT 'SAR',
+        status TEXT DEFAULT 'pending',
+        payment_method TEXT DEFAULT 'bank_transfer',
+        payment_date TEXT,
+        reference_id TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        processed_at TIMESTAMP
+    )""")
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS policies (
         id SERIAL PRIMARY KEY,
@@ -295,6 +348,49 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM training_courses")
     if c.fetchone()[0] == 0:
         _seed_training_courses(c)
+        conn.commit()
+
+
+    # Seed expenses
+    c.execute("SELECT COUNT(*) FROM expenses")
+    if c.fetchone()[0] == 0:
+        expenses = [
+            ("EXP-2026-001", "E001", "travel", "Airport taxi for client meeting", 350, "2026-02-20", "pending", "E003"),
+            ("EXP-2026-002", "E001", "meals", "Team lunch - project launch celebration", 480, "2026-02-18", "approved", "E003"),
+            ("EXP-2026-003", "E004", "office_supplies", "External monitor for home office", 1200, "2026-02-15", "pending", "E003"),
+            ("EXP-2026-004", "E006", "training", "HR certification course materials", 750, "2026-02-10", "approved", "E002"),
+            ("EXP-2026-005", "E007", "travel", "Uber to data center for server migration", 180, "2026-02-22", "pending", "E003"),
+        ]
+        for e in expenses:
+            c.execute("INSERT INTO expenses (ref, employee_id, category, description, amount, expense_date, status, approver_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", e)
+
+        conn.commit()
+
+    # Seed claims
+    c.execute("SELECT COUNT(*) FROM claims")
+    if c.fetchone()[0] == 0:
+        claims = [
+            ("CLM-2026-001", "E001", "medical", "Dental treatment - root canal", 2800, "pending", "E002"),
+            ("CLM-2026-002", "E004", "medical", "Eye examination and prescription glasses", 950, "approved", "E002"),
+            ("CLM-2026-003", "E006", "relocation", "Moving expenses - new apartment", 3500, "pending", "E002"),
+            ("CLM-2026-004", "E007", "education", "Professional certification exam fee", 1800, "pending", "E003"),
+        ]
+        for cl in claims:
+            c.execute("INSERT INTO claims (ref, employee_id, claim_type, description, amount, status, approver_id) VALUES (%s,%s,%s,%s,%s,%s,%s)", cl)
+        conn.commit()
+
+    # Seed payments
+    c.execute("SELECT COUNT(*) FROM payments")
+    if c.fetchone()[0] == 0:
+        payments = [
+            ("PAY-2026-001", "E001", "salary", "February 2026 Salary", 16500, "completed", "bank_transfer", "2026-02-25"),
+            ("PAY-2026-002", "E002", "salary", "February 2026 Salary", 24500, "completed", "bank_transfer", "2026-02-25"),
+            ("PAY-2026-003", "E001", "reimbursement", "Expense EXP-2026-002 reimbursement", 480, "completed", "bank_transfer", "2026-02-20"),
+            ("PAY-2026-004", "E004", "reimbursement", "Claim CLM-2026-002 approved amount", 950, "processing", "bank_transfer", None),
+            ("PAY-2026-005", "E006", "bonus", "Q4 2025 Performance Bonus", 2500, "completed", "bank_transfer", "2026-02-25"),
+        ]
+        for p in payments:
+            c.execute("INSERT INTO payments (ref, employee_id, payment_type, description, amount, status, payment_method, payment_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", p)
         conn.commit()
 
     conn.close()
@@ -1420,3 +1516,223 @@ def get_employee_all_requests(emp_id):
 
 # Auto-init on import
 init_db()
+
+
+# ── Expense Management ──────────────────────────────────
+
+def create_expense(employee_id, category, description, amount, expense_date, receipt_ref=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM expenses")
+    count = c.fetchone()[0]
+    ref = f"EXP-2026-{count+1:03d}"
+    emp = get_employee(employee_id)
+    approver_id = emp.get("manager_id") if emp else None
+    c.execute("""INSERT INTO expenses (ref, employee_id, category, description, amount, expense_date, receipt_ref, approver_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING ref""",
+        (ref, employee_id, category, description, amount, expense_date, receipt_ref, approver_id))
+    conn.commit()
+    conn.close()
+    _create_notification(employee_id, "expense", "Expense Submitted", f"Your expense {ref} for {amount} SAR has been submitted.")
+    return {"ref": ref, "amount": amount, "category": category, "status": "pending"}
+
+
+def get_employee_expenses(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT e.*, m.name as approver_name FROM expenses e
+        LEFT JOIN employees m ON e.approver_id = m.id
+        WHERE e.employee_id = %s ORDER BY e.created_at DESC""", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_pending_expenses(manager_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT e.*, emp.name as employee_name, emp.department
+        FROM expenses e JOIN employees emp ON e.employee_id = emp.id
+        WHERE e.approver_id = %s AND e.status = 'pending'
+        ORDER BY e.created_at DESC""", (manager_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def approve_expense(ref, decision, rejection_reason=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT employee_id, amount FROM expenses WHERE ref = %s AND status = 'pending'", (ref,))
+    row = _fetchone(c)
+    if not row:
+        conn.close()
+        return None
+    status = "approved" if decision == "approved" else "rejected"
+    c.execute("UPDATE expenses SET status = %s, approved_at = NOW(), rejection_reason = %s WHERE ref = %s",
+        (status, rejection_reason, ref))
+    conn.commit()
+    # Auto-create reimbursement payment if approved
+    if status == "approved":
+        _create_reimbursement_payment(c, conn, row["employee_id"], row["amount"], f"Expense {ref} reimbursement", ref)
+    conn.close()
+    _create_notification(row["employee_id"], "expense", f"Expense {status.title()}", f"Your expense {ref} has been {status}.")
+    return {"ref": ref, "status": status}
+
+
+def get_expense_summary(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT
+        COUNT(*) as total,
+        COALESCE(SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END), 0) as pending,
+        COALESCE(SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END), 0) as approved,
+        COALESCE(SUM(CASE WHEN status='approved' THEN amount ELSE 0 END), 0) as approved_amount,
+        COALESCE(SUM(CASE WHEN status='pending' THEN amount ELSE 0 END), 0) as pending_amount
+        FROM expenses WHERE employee_id = %s""", (employee_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+# ── Claims Management ───────────────────────────────────
+
+def submit_claim(employee_id, claim_type, description, amount, supporting_doc=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM claims")
+    count = c.fetchone()[0]
+    ref = f"CLM-2026-{count+1:03d}"
+    emp = get_employee(employee_id)
+    approver_id = emp.get("manager_id") if emp else None
+    c.execute("""INSERT INTO claims (ref, employee_id, claim_type, description, amount, supporting_doc, approver_id)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING ref""",
+        (ref, employee_id, claim_type, description, amount, supporting_doc, approver_id))
+    conn.commit()
+    conn.close()
+    _create_notification(employee_id, "claim", "Claim Submitted", f"Your claim {ref} for {amount} SAR has been submitted.")
+    return {"ref": ref, "amount": amount, "claim_type": claim_type, "status": "pending"}
+
+
+def get_employee_claims(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT cl.*, m.name as approver_name FROM claims cl
+        LEFT JOIN employees m ON cl.approver_id = m.id
+        WHERE cl.employee_id = %s ORDER BY cl.submitted_at DESC""", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_pending_claims(manager_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT cl.*, emp.name as employee_name, emp.department
+        FROM claims cl JOIN employees emp ON cl.employee_id = emp.id
+        WHERE cl.approver_id = %s AND cl.status = 'pending'
+        ORDER BY cl.submitted_at DESC""", (manager_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def approve_claim(ref, decision, approved_amount=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT employee_id, amount FROM claims WHERE ref = %s AND status = 'pending'", (ref,))
+    row = _fetchone(c)
+    if not row:
+        conn.close()
+        return None
+    status = "approved" if decision == "approved" else "rejected"
+    final_amount = approved_amount or row["amount"]
+    c.execute("UPDATE claims SET status = %s, approved_amount = %s, processed_at = NOW() WHERE ref = %s",
+        (status, final_amount if status == "approved" else None, ref))
+    conn.commit()
+    if status == "approved":
+        _create_reimbursement_payment(c, conn, row["employee_id"], final_amount, f"Claim {ref} approved amount", ref)
+    conn.close()
+    _create_notification(row["employee_id"], "claim", f"Claim {status.title()}", f"Your claim {ref} has been {status}.")
+    return {"ref": ref, "status": status, "approved_amount": final_amount}
+
+
+# ── Payments Management ─────────────────────────────────
+
+def _create_reimbursement_payment(c, conn, employee_id, amount, description, reference_id):
+    c.execute("SELECT COUNT(*) FROM payments")
+    count = c.fetchone()[0]
+    ref = f"PAY-2026-{count+1:03d}"
+    c.execute("""INSERT INTO payments (ref, employee_id, payment_type, description, amount, status, reference_id)
+        VALUES (%s,%s,'reimbursement',%s,%s,'processing',%s)""",
+        (ref, employee_id, description, amount, reference_id))
+    conn.commit()
+    return ref
+
+
+def get_employee_payments(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM payments WHERE employee_id = %s ORDER BY created_at DESC", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_all_payments(status_filter=None):
+    conn = get_db()
+    c = conn.cursor()
+    if status_filter:
+        c.execute("""SELECT p.*, e.name as employee_name, e.department
+            FROM payments p JOIN employees e ON p.employee_id = e.id
+            WHERE p.status = %s ORDER BY p.created_at DESC""", (status_filter,))
+    else:
+        c.execute("""SELECT p.*, e.name as employee_name, e.department
+            FROM payments p JOIN employees e ON p.employee_id = e.id
+            ORDER BY p.created_at DESC""")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def process_payment(ref, status, payment_date=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT employee_id FROM payments WHERE ref = %s", (ref,))
+    row = _fetchone(c)
+    if not row:
+        conn.close()
+        return None
+    c.execute("UPDATE payments SET status = %s, payment_date = %s, processed_at = NOW() WHERE ref = %s",
+        (status, payment_date or str(date.today()), ref))
+    conn.commit()
+    conn.close()
+    _create_notification(row["employee_id"], "payment", f"Payment {status.title()}", f"Payment {ref} status: {status}")
+    return {"ref": ref, "status": status}
+
+
+def get_payment_summary(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT
+        COALESCE(SUM(CASE WHEN status='completed' THEN amount ELSE 0 END), 0) as total_received,
+        COALESCE(SUM(CASE WHEN status='processing' THEN amount ELSE 0 END), 0) as processing,
+        COALESCE(SUM(CASE WHEN status='pending' THEN amount ELSE 0 END), 0) as pending,
+        COUNT(*) as total_payments
+        FROM payments WHERE employee_id = %s""", (employee_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def _create_notification(employee_id, ntype, title, message):
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("INSERT INTO notifications (employee_id, type, title, message) VALUES (%s,%s,%s,%s)",
+            (employee_id, ntype, title, message))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+

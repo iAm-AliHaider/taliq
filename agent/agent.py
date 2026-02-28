@@ -103,6 +103,19 @@ NOTIFICATIONS:
 ALL REQUESTS:
 - "Show my requests" / "What are my requests" / "My status" -> show_my_requests (shows ALL requests at once)
 
+EXPENSES:
+- "Submit expense" / "New expense" -> show_expense_form (interactive form)
+- "Show my expenses" -> show_my_expenses
+- Categories: travel, meals, office_supplies, training, communication, other
+
+CLAIMS:
+- "Submit claim" / "File a claim" -> show_claim_form (interactive form)
+- "Show my claims" -> show_my_claims
+- Types: medical, dental, vision, education, relocation, other
+
+PAYMENTS:
+- "Show my payments" / "Payment history" -> show_my_payments (salary, reimbursements, bonuses)
+
 MANAGER TOOLS (only for managers E002, E003, E005):
 Approval actions:
 - "Show all pending" -> show_all_pending_approvals (shows ALL pending items at once)
@@ -112,6 +125,13 @@ Approval actions:
 - "Approve overtime" -> approve_overtime_request (record_id, decision)
 - "Approve document DOC-xxx" -> approve_document_request (ref, decision)
 Use decision='approved'/'rejected' (or 'ready'/'rejected' for docs).
+
+Expense & Claim Approvals:
+- "Pending expenses" -> show_pending_expenses
+- "Approve expense EXP-xxx" -> approve_expense_request (ref, decision)
+- "Pending claims" -> show_pending_claims
+- "Approve claim CLM-xxx" -> approve_claim_request (ref, decision)
+- "All payments" -> show_all_payments_admin
 
 Team Analytics:
 - "Show team performance" -> show_team_performance
@@ -1654,6 +1674,144 @@ async def show_employee_details(
     return f"Showing full details for {emp['name']}."
 
 
+
+# ── Expense Management Tools ────────────────────────────
+
+@function_tool
+async def submit_expense(ctx: RunContext, category: str, description: str, amount: float, expense_date: str) -> str:
+    """Submit a new expense claim. Categories: travel, meals, office_supplies, training, communication, other."""
+    emp_id = get_current_employee_id_from_context()
+    result = db.create_expense(emp_id, category, description, amount, expense_date)
+    await _send_ui("ExpenseListCard", {
+        "expenses": db.get_employee_expenses(emp_id),
+        "summary": db.get_expense_summary(emp_id),
+    }, f"expenses_{emp_id}")
+    return f"Expense {result['ref']} submitted for {amount} SAR. Category: {category}. Pending manager approval."
+
+@function_tool
+async def show_my_expenses(ctx: RunContext) -> str:
+    """Show the employee's expense history and summary."""
+    emp_id = get_current_employee_id_from_context()
+    expenses = db.get_employee_expenses(emp_id)
+    summary = db.get_expense_summary(emp_id)
+    await _send_ui("ExpenseListCard", {
+        "expenses": expenses,
+        "summary": summary,
+    }, f"expenses_{emp_id}")
+    if not expenses:
+        return "You have no expenses on record."
+    return f"You have {len(expenses)} expenses. {summary.get('pending', 0)} pending, {summary.get('approved', 0)} approved."
+
+@function_tool
+async def show_expense_form(ctx: RunContext) -> str:
+    """Show the interactive expense submission form."""
+    await _send_ui("ExpenseForm", {
+        "categories": ["travel", "meals", "office_supplies", "training", "communication", "other"],
+    }, "expense_form")
+    return "Here's the expense form. Fill in the details and submit."
+
+@function_tool
+async def approve_expense_request(ctx: RunContext, ref: str, decision: str) -> str:
+    """Approve or reject an expense request. Decision: approved/rejected."""
+    result = db.approve_expense(ref, decision)
+    if not result:
+        return f"Expense {ref} not found or already processed."
+    return f"Expense {ref} has been {result['status']}."
+
+@function_tool
+async def show_pending_expenses(ctx: RunContext) -> str:
+    """Show all pending expense requests for manager approval."""
+    emp_id = get_current_employee_id_from_context()
+    pending = db.get_pending_expenses(emp_id)
+    if not pending:
+        return "No pending expense requests."
+    await _send_ui("ExpenseApprovalCard", {
+        "expenses": pending,
+    }, "pending_expenses")
+    return f"You have {len(pending)} pending expense requests to review."
+
+
+# ── Claims Management Tools ─────────────────────────────
+
+@function_tool
+async def submit_claim(ctx: RunContext, claim_type: str, description: str, amount: float) -> str:
+    """Submit an insurance/reimbursement claim. Types: medical, dental, vision, education, relocation, other."""
+    emp_id = get_current_employee_id_from_context()
+    result = db.submit_claim(emp_id, claim_type, description, amount)
+    await _send_ui("ClaimListCard", {
+        "claims": db.get_employee_claims(emp_id),
+    }, f"claims_{emp_id}")
+    return f"Claim {result['ref']} submitted for {amount} SAR. Type: {claim_type}. Pending review."
+
+@function_tool
+async def show_my_claims(ctx: RunContext) -> str:
+    """Show the employee's claims history."""
+    emp_id = get_current_employee_id_from_context()
+    claims = db.get_employee_claims(emp_id)
+    await _send_ui("ClaimListCard", {
+        "claims": claims,
+    }, f"claims_{emp_id}")
+    if not claims:
+        return "You have no claims on record."
+    pending = len([c for c in claims if c.get("status") == "pending"])
+    return f"You have {len(claims)} claims. {pending} pending."
+
+@function_tool
+async def show_claim_form(ctx: RunContext) -> str:
+    """Show the interactive claim submission form."""
+    await _send_ui("ClaimForm", {
+        "types": ["medical", "dental", "vision", "education", "relocation", "other"],
+    }, "claim_form")
+    return "Here's the claim form. Fill in the details and submit."
+
+@function_tool
+async def approve_claim_request(ctx: RunContext, ref: str, decision: str) -> str:
+    """Approve or reject a claim. Decision: approved/rejected."""
+    result = db.approve_claim(ref, decision)
+    if not result:
+        return f"Claim {ref} not found or already processed."
+    return f"Claim {ref} has been {result['status']}."
+
+@function_tool
+async def show_pending_claims(ctx: RunContext) -> str:
+    """Show all pending claims for manager review."""
+    emp_id = get_current_employee_id_from_context()
+    pending = db.get_pending_claims(emp_id)
+    if not pending:
+        return "No pending claims."
+    await _send_ui("ClaimApprovalCard", {
+        "claims": pending,
+    }, "pending_claims")
+    return f"You have {len(pending)} pending claims to review."
+
+
+# ── Payments Management Tools ───────────────────────────
+
+@function_tool
+async def show_my_payments(ctx: RunContext) -> str:
+    """Show the employee's payment history (salary, reimbursements, bonuses)."""
+    emp_id = get_current_employee_id_from_context()
+    payments = db.get_employee_payments(emp_id)
+    summary = db.get_payment_summary(emp_id)
+    await _send_ui("PaymentListCard", {
+        "payments": payments,
+        "summary": summary,
+    }, f"payments_{emp_id}")
+    if not payments:
+        return "No payment records found."
+    return f"You have {len(payments)} payment records. Total received: {summary.get('total_received', 0)} SAR."
+
+@function_tool
+async def show_all_payments_admin(ctx: RunContext) -> str:
+    """Show all payments across the organization (manager/admin only)."""
+    payments = db.get_all_payments()
+    await _send_ui("PaymentListCard", {
+        "payments": payments,
+        "isAdmin": True,
+    }, "all_payments")
+    return f"Showing {len(payments)} payment records across all employees."
+
+
 ALL_TOOLS = [
     # Dashboard
     show_dashboard,
@@ -1708,6 +1866,16 @@ ALL_TOOLS = [
     show_notifications,
     # All Requests
     show_my_requests,
+    # Expenses
+    submit_expense,
+    show_my_expenses,
+    show_expense_form,
+    # Claims
+    submit_claim,
+    show_my_claims,
+    show_claim_form,
+    # Payments
+    show_my_payments,
     # Manager - Basic
     show_team_overview,
     show_department_stats,
@@ -1726,6 +1894,12 @@ ALL_TOOLS = [
     show_all_pending_approvals,
     show_leave_analytics,
     show_headcount_report,
+    # Manager - Expenses & Claims
+    approve_expense_request,
+    show_pending_expenses,
+    approve_claim_request,
+    show_pending_claims,
+    show_all_payments_admin,
     # Manager - Administration
     reassign_team_member,
     show_employee_details,
@@ -1740,6 +1914,7 @@ MANAGER_ONLY_TOOLS = {
     "show_team_performance", "show_team_training_compliance",
     "show_all_pending_approvals", "show_leave_analytics", "show_headcount_report",
     "reassign_team_member", "show_employee_details",
+    "approve_expense_request", "show_pending_expenses", "approve_claim_request", "show_pending_claims", "show_all_payments_admin",
 }
 
 
@@ -1784,6 +1959,9 @@ async def _handle_data(data: rtc.DataPacket):
         action = msg.get("action", "")
         action_map = {
             # Form submissions from interactive cards
+            # Expense form
+            "submit_expense": lambda d: f"Submit expense: {d.get('category','')} - {d.get('description','')} - {d.get('amount',0)} SAR on {d.get('expense_date','')}",
+            "submit_claim": lambda d: f"Submit claim: {d.get('claim_type','')} - {d.get('description','')} - {d.get('amount',0)} SAR",
             "submit_leave": lambda: f"Submit leave request: {msg.get('leave_type', 'annual')} leave from {msg.get('start_date', '')} to {msg.get('end_date', '')}, {msg.get('days', 0)} days, reason: {msg.get('reason', 'personal')}",
             "submit_loan": lambda: f"Apply for {msg.get('loan_type', 'Interest-Free')} loan of {msg.get('amount', 0)} SAR over {msg.get('months', 12)} months",
             "submit_document_request": lambda: f"Request a {msg.get('document_type', 'Salary Certificate')}",
