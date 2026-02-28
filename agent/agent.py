@@ -114,6 +114,10 @@ CLAIMS:
 - "Show my claims" -> show_my_claims
 - Types: medical, dental, vision, education, relocation, other
 
+GOSI & END OF SERVICE:
+- "Show my GOSI" / "GOSI breakdown" -> show_gosi_breakdown
+- "End of service" / "Gratuity" / "EOS" -> show_end_of_service (reason: termination/resignation)
+
 PAYMENTS:
 - "Show my payments" / "Payment history" -> show_my_payments (salary, reimbursements, bonuses)
 
@@ -1852,6 +1856,67 @@ async def show_all_payments_admin(ctx: RunContext) -> str:
     return f"Showing {len(payments)} payment records across all employees."
 
 
+
+# ── GOSI & End of Service Tools ─────────────────────────
+
+@function_tool
+async def show_gosi_breakdown(ctx: RunContext) -> str:
+    """Show GOSI social insurance breakdown for the employee."""
+    emp_id = get_current_employee_id_from_context()
+    gosi = db.calculate_gosi(emp_id)
+    if not gosi:
+        return "Employee not found."
+    await _send_ui("GOSICard", {
+        "name": gosi["name"],
+        "employeeId": emp_id,
+        "nationality": gosi["nationality"],
+        "isSaudi": gosi["is_saudi"],
+        "basicSalary": gosi["basic_salary"],
+        "housingAllowance": gosi["housing_allowance"],
+        "insurableSalary": gosi["insurable_salary"],
+        "employeeContribution": gosi["employee_contribution"],
+        "employerContribution": gosi["employer_contribution"],
+        "totalContribution": gosi["total_contribution"],
+        "employeeRate": gosi["employee_rate"],
+        "employerRate": gosi["employer_rate"],
+        "breakdown": gosi["breakdown"],
+        "annualEmployee": gosi["annual_employee"],
+        "annualEmployer": gosi["annual_employer"],
+        "annualTotal": gosi["annual_total"],
+    }, "gosi_card")
+    return f"GOSI: You pay {gosi['employee_contribution']:,.0f} SAR/month ({gosi['employee_rate']}%). Employer pays {gosi['employer_contribution']:,.0f} SAR/month."
+
+@function_tool
+async def show_end_of_service(ctx: RunContext, reason: str = "termination") -> str:
+    """Calculate end of service gratuity. Reason: termination, resignation."""
+    emp_id = get_current_employee_id_from_context()
+    eos = db.calculate_end_of_service(emp_id, reason)
+    if not eos:
+        return "Employee not found."
+    await _send_ui("EndOfServiceCard", {
+        "name": eos["name"],
+        "employeeId": emp_id,
+        "position": eos["position"],
+        "department": eos["department"],
+        "joinDate": eos["join_date"],
+        "yearsOfService": eos["years_of_service"],
+        "monthsOfService": eos["months_of_service"],
+        "baseWage": eos["base_wage"],
+        "dailyWage": eos["daily_wage"],
+        "reason": eos["reason"],
+        "eligible": eos["eligible"],
+        "gratuityAmount": eos["gratuity_amount"],
+        "first5Years": eos["first_5_years"],
+        "after5Years": eos["after_5_years"],
+        "multiplier": eos["multiplier"],
+        "note": eos["note"],
+        "currency": eos["currency"],
+    }, "eos_card")
+    if eos["eligible"]:
+        return f"End of service gratuity: {eos['gratuity_amount']:,.0f} SAR based on {eos['years_of_service']:.1f} years ({reason}). {eos['note']}"
+    return eos["note"]
+
+
 ALL_TOOLS = [
     # Dashboard
     show_dashboard,
@@ -1940,6 +2005,8 @@ ALL_TOOLS = [
     approve_claim_request,
     show_pending_claims,
     show_all_payments_admin,
+    show_gosi_breakdown,
+    show_end_of_service,
     # Manager - Administration
     reassign_team_member,
     show_employee_details,
@@ -2017,6 +2084,7 @@ async def _handle_data(data: rtc.DataPacket):
             "apply_loan": lambda: "I want to apply for a loan. Show the loan form.",
             "clock_in": lambda: f"Clock me in at {msg.get('location', 'office')}",
             "clock_out": lambda: "Clock me out",
+            "calculate_eos": lambda: f"Calculate end of service for {msg.get('reason', 'termination')}",
         }
         handler = action_map.get(action)
         text = handler() if handler else f"User action: {action}"

@@ -467,6 +467,31 @@ DEFAULT_POLICIES = {
     "attendance": {"work_start": "08:00", "work_end": "17:00", "late_threshold": "08:30", "standard_hours": 8, "max_overtime_hours": 4, "overtime_approval": True},
     "travel": {"max_days": 30, "approval_required": True, "per_diem_chairman_intl": 3500, "per_diem_chairman_local": 2000, "per_diem_clevel_intl": 1750, "per_diem_clevel_local": 1200, "per_diem_other_intl": 1350, "per_diem_other_local": 900},
     "grievance": {"categories": ["harassment", "discrimination", "safety", "policy", "compensation", "other"], "severity_levels": ["low", "medium", "high", "critical"], "sla_hours": {"low": 168, "medium": 72, "high": 24, "critical": 4}},
+    "gosi": {
+        "employee_rate": 9.75,
+        "employer_rate": 11.75,
+        "max_insurable_salary": 45000,
+        "annuities_employee": 9.75,
+        "annuities_employer": 9.0,
+        "occupational_hazards_employer": 2.0,
+        "saned_employer": 0.75,
+        "applies_to": "saudi_nationals",
+        "non_saudi_rate": 2.0,
+        "effective_date": "2026-01-01"
+    },
+    "end_of_service": {
+        "first_5_years_rate": 0.5,
+        "after_5_years_rate": 1.0,
+        "min_service_months": 24,
+        "resignation_1_2_years": 0,
+        "resignation_2_5_years": 0.333,
+        "resignation_5_10_years": 0.667,
+        "resignation_10_plus_years": 1.0,
+        "termination_rate": 1.0,
+        "max_months_salary": 0,
+        "based_on": "last_basic_plus_housing",
+        "effective_date": "2026-01-01"
+    },
 }
 
 
@@ -553,6 +578,146 @@ def get_all_policies():
     conn.close()
     return {r["category"]: {"config": r["config"], "updated_at": r["updated_at"], "updated_by": r["updated_by"]} for r in rows}
 
+
+
+
+def calculate_gosi(employee_id: str):
+    """Calculate GOSI contributions for an employee based on policy."""
+    emp = get_employee(employee_id)
+    if not emp:
+        return None
+    sal = emp["salary"]
+    policy = get_policy("gosi") or {}
+    
+    basic = sal["basic"]
+    housing = sal["housing"]
+    insurable = min(basic + housing, policy.get("max_insurable_salary", 45000))
+    
+    nationality = emp.get("nationality", "Saudi")
+    is_saudi = "saudi" in nationality.lower()
+    
+    if is_saudi:
+        emp_rate = policy.get("employee_rate", 9.75) / 100
+        er_rate = policy.get("employer_rate", 11.75) / 100
+        emp_contribution = round(insurable * emp_rate, 2)
+        er_contribution = round(insurable * er_rate, 2)
+        breakdown = {
+            "annuities_employee": round(insurable * policy.get("annuities_employee", 9.75) / 100, 2),
+            "annuities_employer": round(insurable * policy.get("annuities_employer", 9.0) / 100, 2),
+            "occupational_hazards": round(insurable * policy.get("occupational_hazards_employer", 2.0) / 100, 2),
+            "saned": round(insurable * policy.get("saned_employer", 0.75) / 100, 2),
+        }
+    else:
+        non_saudi_rate = policy.get("non_saudi_rate", 2.0) / 100
+        emp_contribution = 0
+        er_contribution = round(insurable * non_saudi_rate, 2)
+        breakdown = {"occupational_hazards": er_contribution}
+    
+    return {
+        "employee_id": employee_id,
+        "name": emp["name"],
+        "nationality": nationality,
+        "is_saudi": is_saudi,
+        "basic_salary": basic,
+        "housing_allowance": housing,
+        "insurable_salary": insurable,
+        "employee_contribution": emp_contribution,
+        "employer_contribution": er_contribution,
+        "total_contribution": emp_contribution + er_contribution,
+        "employee_rate": policy.get("employee_rate", 9.75) if is_saudi else 0,
+        "employer_rate": policy.get("employer_rate", 11.75) if is_saudi else policy.get("non_saudi_rate", 2.0),
+        "breakdown": breakdown,
+        "annual_employee": emp_contribution * 12,
+        "annual_employer": er_contribution * 12,
+        "annual_total": (emp_contribution + er_contribution) * 12,
+    }
+
+
+def calculate_end_of_service(employee_id: str, reason: str = "termination"):
+    """Calculate end of service benefit (gratuity) based on Saudi Labor Law + policy."""
+    from datetime import datetime, date
+    emp = get_employee(employee_id)
+    if not emp:
+        return None
+    policy = get_policy("end_of_service") or {}
+    
+    join_date = emp.get("join_date", "2020-01-01")
+    if isinstance(join_date, str):
+        join_date = datetime.strptime(join_date, "%Y-%m-%d").date()
+    today = date.today()
+    
+    total_days = (today - join_date).days
+    total_years = total_days / 365.25
+    total_months = total_days / 30.44
+    
+    sal = emp["salary"]
+    based_on = policy.get("based_on", "last_basic_plus_housing")
+    if based_on == "last_basic_plus_housing":
+        base_wage = sal["basic"] + sal["housing"]
+    elif based_on == "last_total":
+        base_wage = sal["total"]
+    else:
+        base_wage = sal["basic"]
+    
+    daily_wage = base_wage / 30
+    
+    # Calculate gratuity per Saudi Labor Law
+    min_months = policy.get("min_service_months", 24)
+    if total_months < min_months:
+        gratuity = 0
+        eligible = False
+        note = f"Minimum {min_months} months service required. Currently {total_months:.0f} months."
+    else:
+        eligible = True
+        # First 5 years: half month per year
+        first_5 = min(total_years, 5)
+        rate_first = policy.get("first_5_years_rate", 0.5)
+        # After 5 years: full month per year
+        after_5 = max(total_years - 5, 0)
+        rate_after = policy.get("after_5_years_rate", 1.0)
+        
+        gratuity_first = first_5 * rate_first * base_wage
+        gratuity_after = after_5 * rate_after * base_wage
+        full_gratuity = gratuity_first + gratuity_after
+        
+        # Apply resignation discount
+        reason_lower = reason.lower()
+        if "resign" in reason_lower:
+            if total_years < 2:
+                multiplier = policy.get("resignation_1_2_years", 0)
+            elif total_years < 5:
+                multiplier = policy.get("resignation_2_5_years", 0.333)
+            elif total_years < 10:
+                multiplier = policy.get("resignation_5_10_years", 0.667)
+            else:
+                multiplier = policy.get("resignation_10_plus_years", 1.0)
+        else:
+            multiplier = policy.get("termination_rate", 1.0)
+        
+        gratuity = round(full_gratuity * multiplier, 2)
+        note = f"Based on {total_years:.1f} years of service"
+        if "resign" in reason_lower:
+            note += f" (resignation: {multiplier*100:.0f}% of full gratuity)"
+    
+    return {
+        "employee_id": employee_id,
+        "name": emp["name"],
+        "position": emp["position"],
+        "department": emp["department"],
+        "join_date": str(join_date),
+        "years_of_service": round(total_years, 2),
+        "months_of_service": round(total_months, 1),
+        "base_wage": base_wage,
+        "daily_wage": round(daily_wage, 2),
+        "reason": reason,
+        "eligible": eligible,
+        "gratuity_amount": gratuity,
+        "first_5_years": round(min(total_years, 5) * policy.get("first_5_years_rate", 0.5) * base_wage, 2) if eligible else 0,
+        "after_5_years": round(max(total_years - 5, 0) * policy.get("after_5_years_rate", 1.0) * base_wage, 2) if eligible else 0,
+        "multiplier": multiplier if eligible else 0,
+        "note": note,
+        "currency": "SAR",
+    }
 
 
 # ── Query Functions ─────────────────────────────────────

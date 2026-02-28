@@ -47,6 +47,8 @@ import { ClaimForm } from "./taliq/ClaimForm";
 import { ClaimApprovalCard } from "./taliq/ClaimApprovalCard";
 import PaymentListCard from "./taliq/PaymentListCard";
 import { SalaryBreakdownCard } from "./taliq/SalaryBreakdownCard";
+import { GOSICard } from "./taliq/GOSICard";
+import { EndOfServiceCard } from "./taliq/EndOfServiceCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -92,6 +94,8 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   ClaimApprovalCard,
   PaymentListCard,
   SalaryBreakdownCard,
+  GOSICard,
+  EndOfServiceCard,
 };
 
 interface Props {
