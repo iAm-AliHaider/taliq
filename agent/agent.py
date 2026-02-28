@@ -104,7 +104,8 @@ ALL REQUESTS:
 - "Show my requests" / "What are my requests" / "My status" -> show_my_requests (shows ALL requests at once)
 
 EXPENSES:
-- "Submit expense" / "New expense" -> show_expense_form (interactive form)
+- "Submit a travel expense for 450 SAR" -> submit_expense (DIRECT - when details provided via voice)
+- "Submit expense" / "New expense" (no details) -> show_expense_form (interactive form)
 - "Show my expenses" -> show_my_expenses
 - Categories: travel, meals, office_supplies, training, communication, other
 
