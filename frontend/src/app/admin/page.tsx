@@ -90,7 +90,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Audit Log"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -169,6 +169,7 @@ export default function AdminPage() {
   const [iqama, setIqama] = useState<any[]>([]);
   const [exits, setExits] = useState<any[]>([]);
   const [reports, setReports] = useState<any>(null);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
   // Create employee
   const [showCreateEmp, setShowCreateEmp] = useState(false);
   const [newEmp, setNewEmp] = useState<Record<string, string>>({ id: "", name: "", nameAr: "", position: "", department: "", email: "", phone: "", nationality: "Saudi", grade: "", managerId: "", basicSalary: "0", housingAllowance: "0", transportAllowance: "0", pin: "1234" });
@@ -202,6 +203,7 @@ export default function AdminPage() {
       adminFetch("section=iqama").then(d => d && setIqama(d));
       adminFetch("section=exits").then(d => d && setExits(d));
       adminFetch("section=reports").then(d => d && setReports(d));
+      adminFetch("section=audit_log").then(d => d && setAuditLog(d.entries || []));
     }
   }, [authed]);
 
@@ -812,6 +814,41 @@ export default function AdminPage() {
         )}
 
         {/* REPORTS */}
+        {tab === "Audit Log" && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="text-base font-bold text-gray-900">Audit Trail</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{auditLog.length} entries</p>
+              </div>
+              <div className="max-h-[500px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">Time</th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">Actor</th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">Action</th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">Entity</th>
+                      <th className="px-4 py-2 text-left text-gray-600 font-medium">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {auditLog.map((e: any, i: number) => (
+                      <tr key={i} className="hover:bg-gray-50/50">
+                        <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{String(e.timestamp || "").slice(0,16).replace("T"," ")}</td>
+                        <td className="px-4 py-2 font-medium text-gray-800">{e.actor_id || e.actor}</td>
+                        <td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold">{(e.action || "").replace(/_/g," ").toUpperCase()}</span></td>
+                        <td className="px-4 py-2 text-gray-600">{e.entity_type} <span className="font-mono text-gray-400">{e.entity_id}</span></td>
+                        <td className="px-4 py-2 text-gray-400 max-w-[200px] truncate">{JSON.stringify(e.details || {})}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {auditLog.length === 0 && <div className="px-5 py-8 text-center text-sm text-gray-400">No audit entries yet</div>}
+              </div>
+            </div>
+          </div>
+        )}
         {tab === "Reports" && reports && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

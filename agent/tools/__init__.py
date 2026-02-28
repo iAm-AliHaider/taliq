@@ -126,3 +126,10 @@ from tools.modules import (
     show_exit_status,
     show_all_exits,
 )
+
+from tools.admin_ops import (
+    view_audit_log,
+    bulk_approve_pending_leaves,
+    bulk_approve_pending_expenses,
+    send_pending_notifications,
+)

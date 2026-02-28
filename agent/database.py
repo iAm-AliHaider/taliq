@@ -437,6 +437,19 @@ def init_db():
         completed_at TIMESTAMP
     )""")
 
+    # --- Audit Log ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id SERIAL PRIMARY KEY,
+        timestamp TIMESTAMP DEFAULT NOW(),
+        actor_id TEXT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id TEXT,
+        details JSONB DEFAULT '{}',
+        ip_address TEXT
+    )""")
+
     conn.commit()
 
     # Seed policies
@@ -901,6 +914,7 @@ def set_policy(category: str, config: dict):
     conn.commit()
     conn.close()
     _policy_cache_ts = 0  # Invalidate cache
+    log_audit("admin", "update_policy", "policy", category, {"keys": list(config.keys())})
     return {"ok": True, "category": category, "config": config}
 
 
@@ -1231,6 +1245,7 @@ def approve_leave_request(ref, decision):
     c.execute("SELECT lr.*, e.name as employee_name FROM leave_requests lr JOIN employees e ON lr.employee_id = e.id WHERE lr.ref = %s", (ref,))
     row = _fetchone(c)
     conn.close()
+    log_audit("manager", decision + "_leave", "leave", ref, {"employee": row.get("employee_name") if row else None})
     return row
 
 
@@ -1485,6 +1500,7 @@ def clock_in(emp_id, location="office"):
     c.execute("SELECT * FROM attendance_records WHERE employee_id = %s AND date = %s", (emp_id, today))
     row = _fetchone(c)
     conn.close()
+    log_audit(emp_id, "clock_in", "attendance", emp_id, {"time": now, "status": status})
     return row
 
 
@@ -2140,6 +2156,7 @@ def create_expense(employee_id, category, description, amount, expense_date, rec
         _conn2.commit()
         _conn2.close()
     _create_notification(employee_id, "expense", "Expense Submitted", f"Your expense {ref} for {amount} SAR has been submitted.")
+    log_audit(employee_id, "create_expense", "expense", ref, {"amount": amount, "category": category})
     return {"ref": ref, "amount": amount, "category": category, "status": "pending"}
 
 
@@ -2764,6 +2781,7 @@ def initiate_exit(employee_id, exit_type="resignation", reason=None, last_workin
 
     _create_notification(employee_id, "exit", f"Exit Request: {ref}",
         f"Your {exit_type} request has been initiated. Last working day: {last_working_day}")
+    log_audit(employee_id, "initiate_exit", "exit", ref, {"type": exit_type, "last_day": last_working_day})
     return {"ref": ref, "clearance": clearance, "settlement": settlement, "last_working_day": last_working_day}
 
 
@@ -2815,4 +2833,170 @@ def complete_exit(ref):
     conn.commit()
     conn.close()
     return True
+
+
+# ============================================================
+# AUDIT LOG
+# ============================================================
+
+def log_audit(actor_id, action, entity_type=None, entity_id=None, details=None):
+    """Record an audit trail entry."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+        VALUES (%s, %s, %s, %s, %s)""",
+        (actor_id, action, entity_type, entity_id, json.dumps(details or {})))
+    conn.commit()
+    conn.close()
+
+
+def get_audit_log(limit=50, entity_type=None, entity_id=None, actor_id=None):
+    """Retrieve audit log entries with optional filters."""
+    conn = get_db()
+    c = conn.cursor()
+    query = "SELECT * FROM audit_log WHERE 1=1"
+    params = []
+    if entity_type:
+        query += " AND entity_type = %s"
+        params.append(entity_type)
+    if entity_id:
+        query += " AND entity_id = %s"
+        params.append(entity_id)
+    if actor_id:
+        query += " AND actor_id = %s"
+        params.append(actor_id)
+    query += " ORDER BY timestamp DESC LIMIT %s"
+    params.append(limit)
+    c.execute(query, tuple(params))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+# ============================================================
+# BULK OPERATIONS
+# ============================================================
+
+def bulk_approve_leaves(approver_id, leave_ids):
+    """Approve multiple leave requests at once."""
+    conn = get_db()
+    c = conn.cursor()
+    approved = []
+    failed = []
+    for lid in leave_ids:
+        try:
+            c.execute("UPDATE leave_requests SET status = 'approved', approved_by = %s WHERE id = %s AND status = 'pending' RETURNING id, employee_id, ref",
+                (approver_id, lid))
+            row = c.fetchone()
+            if row:
+                approved.append({"id": row[0], "employee_id": row[1], "ref": row[2]})
+                log_audit(approver_id, "bulk_approve_leave", "leave", str(row[0]), {"ref": row[2]})
+            else:
+                failed.append({"id": lid, "reason": "Not found or not pending"})
+        except Exception as e:
+            failed.append({"id": lid, "reason": str(e)})
+    conn.commit()
+    conn.close()
+    return {"approved": len(approved), "failed": len(failed), "details": {"approved": approved, "failed": failed}}
+
+
+def bulk_approve_expenses(approver_id, expense_ids):
+    """Approve multiple expenses at once."""
+    conn = get_db()
+    c = conn.cursor()
+    approved = []
+    failed = []
+    for eid in expense_ids:
+        try:
+            c.execute("UPDATE expenses SET status = 'approved', approver_id = %s WHERE id = %s AND status = 'pending' RETURNING id, ref, employee_id, amount",
+                (approver_id, eid))
+            row = c.fetchone()
+            if row:
+                approved.append({"id": row[0], "ref": row[1], "employee_id": row[2], "amount": float(row[3])})
+                log_audit(approver_id, "bulk_approve_expense", "expense", str(row[0]), {"ref": row[1], "amount": float(row[3])})
+            else:
+                failed.append({"id": eid, "reason": "Not found or not pending"})
+        except Exception as e:
+            failed.append({"id": eid, "reason": str(e)})
+    conn.commit()
+    conn.close()
+    return {"approved": len(approved), "failed": len(failed), "details": {"approved": approved, "failed": failed}}
+
+
+def bulk_import_employees(employees_data):
+    """Import employees from a list of dicts. Returns success/fail counts.
+    Each dict should have: id, name, position, department, email, phone, basic_salary, housing_allowance, transport_allowance, join_date, nationality, manager_id (optional).
+    """
+    conn = get_db()
+    c = conn.cursor()
+    imported = []
+    failed = []
+    for emp in employees_data:
+        try:
+            eid = emp.get("id") or emp.get("employee_id")
+            name = emp.get("name")
+            if not eid or not name:
+                failed.append({"data": emp, "reason": "Missing id or name"})
+                continue
+            salary = json.dumps({
+                "basic": float(emp.get("basic_salary", 0)),
+                "housing": float(emp.get("housing_allowance", 0)),
+                "transport": float(emp.get("transport_allowance", 0)),
+            })
+            leave_balance = json.dumps({
+                "annual": int(emp.get("annual_leave", 21)),
+                "sick": int(emp.get("sick_leave", 30)),
+                "personal": int(emp.get("personal_leave", 5)),
+            })
+            c.execute("""INSERT INTO employees (id, name, email, phone, position, department, join_date, salary, leave_balance, nationality, manager_id, status, pin)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active',%s)
+                ON CONFLICT (id) DO NOTHING RETURNING id""",
+                (eid, name, emp.get("email",""), emp.get("phone",""),
+                 emp.get("position","Staff"), emp.get("department","General"),
+                 emp.get("join_date", str(date.today())),
+                 salary, leave_balance,
+                 emp.get("nationality","Saudi"),
+                 emp.get("manager_id"),
+                 emp.get("pin","1234")))
+            row = c.fetchone()
+            if row:
+                imported.append(eid)
+                log_audit("SYSTEM", "bulk_import_employee", "employee", eid, {"name": name})
+            else:
+                failed.append({"id": eid, "reason": "Duplicate ID"})
+        except Exception as e:
+            failed.append({"id": emp.get("id","?"), "reason": str(e)})
+    conn.commit()
+    conn.close()
+    return {"imported": len(imported), "failed": len(failed), "details": {"imported": imported, "failed": failed}}
+
+
+# ============================================================
+# NOTIFICATION DELIVERY
+# ============================================================
+
+def get_pending_notifications(limit=20):
+    """Get unread notifications for delivery."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT n.*, e.email, e.phone, e.name as employee_name
+        FROM notifications n
+        JOIN employees e ON n.employee_id = e.id
+        WHERE n.is_read = FALSE
+        ORDER BY n.created_at DESC LIMIT %s""", (limit,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def mark_notifications_delivered(notification_ids, channel="whatsapp"):
+    """Mark notifications as delivered via a channel."""
+    conn = get_db()
+    c = conn.cursor()
+    for nid in notification_ids:
+        c.execute("UPDATE notifications SET is_read = TRUE WHERE id = %s", (nid,))
+        log_audit("SYSTEM", "notification_delivered", "notification", str(nid), {"channel": channel})
+    conn.commit()
+    conn.close()
+    return {"marked": len(notification_ids)}
 

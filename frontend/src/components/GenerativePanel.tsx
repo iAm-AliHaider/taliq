@@ -11,6 +11,8 @@ import { PaySlipCard } from "./taliq/PaySlipCard";
 import { InterviewPanel } from "./taliq/InterviewPanel";
 import { ApprovalQueue } from "./taliq/ApprovalQueue";
 import { AttendanceDashboard } from "./taliq/AttendanceDashboard";
+import { AuditLogCard } from "./taliq/AuditLogCard";
+import { NotificationQueueCard } from "./taliq/NotificationQueueCard";
 import { StatusBanner } from "./taliq/StatusBanner";
 import { LoanCard } from "./taliq/LoanCard";
 import { LoanApplicationForm } from "./taliq/LoanApplicationForm";

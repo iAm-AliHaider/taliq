@@ -82,6 +82,10 @@ from tools import (
     search_directory, show_org_chart,
     show_my_iqama_visa, show_expiring_documents,
     initiate_exit_request, show_exit_status, show_all_exits,
+    view_audit_log,
+    bulk_approve_pending_leaves,
+    bulk_approve_pending_expenses,
+    send_pending_notifications,
 )
 
 load_dotenv()
@@ -300,6 +304,8 @@ ALL_TOOLS = [
     show_my_iqama_visa, show_expiring_documents,
     # Exit / Offboarding
     initiate_exit_request, show_exit_status, show_all_exits,
+    # Admin operations
+    view_audit_log, bulk_approve_pending_leaves, bulk_approve_pending_expenses, send_pending_notifications,
 ]
 
 MANAGER_ONLY_TOOLS = {
@@ -317,6 +323,7 @@ MANAGER_ONLY_TOOLS = {
     "show_expiring_contracts", "show_all_assets", "show_team_shifts",
     "show_hr_report", "show_payroll_summary",
     "show_expiring_documents", "show_all_exits",
+    "view_audit_log", "bulk_approve_pending_leaves", "bulk_approve_pending_expenses", "send_pending_notifications",
 }
 
 
