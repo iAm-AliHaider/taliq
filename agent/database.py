@@ -333,6 +333,111 @@ def init_db():
 
     conn.commit()
 
+    # --- Letter Generation ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS letters (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        letter_type TEXT NOT NULL,
+        purpose TEXT,
+        language TEXT DEFAULT 'en',
+        addressed_to TEXT,
+        content_data JSONB DEFAULT '{}',
+        status TEXT DEFAULT 'pending',
+        issued_by TEXT,
+        issued_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Contract Management ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS contracts (
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        contract_type TEXT NOT NULL DEFAULT 'unlimited',
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        probation_end TEXT,
+        renewal_date TEXT,
+        salary REAL,
+        status TEXT DEFAULT 'active',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Asset Tracking ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS assets (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        asset_type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        serial_number TEXT,
+        assigned_to TEXT REFERENCES employees(id),
+        assigned_date TEXT,
+        condition TEXT DEFAULT 'good',
+        status TEXT DEFAULT 'available',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Shift Scheduling ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS shifts (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        break_minutes INTEGER DEFAULT 60,
+        is_night_shift INTEGER DEFAULT 0,
+        differential_pct REAL DEFAULT 0,
+        status TEXT DEFAULT 'active'
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS employee_shifts (
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        shift_id INTEGER NOT NULL REFERENCES shifts(id),
+        effective_date TEXT NOT NULL,
+        end_date TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Iqama / Visa Tracking ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS iqama_visa (
+        id SERIAL PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        document_type TEXT NOT NULL,
+        document_number TEXT,
+        issue_date TEXT,
+        expiry_date TEXT,
+        status TEXT DEFAULT 'valid',
+        cost REAL DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Exit / Offboarding ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS exit_requests (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        employee_id TEXT NOT NULL REFERENCES employees(id),
+        exit_type TEXT NOT NULL DEFAULT 'resignation',
+        reason TEXT,
+        last_working_day TEXT,
+        notice_period_days INTEGER DEFAULT 30,
+        clearance_status JSONB DEFAULT '{}',
+        final_settlement JSONB DEFAULT '{}',
+        status TEXT DEFAULT 'initiated',
+        initiated_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP
+    )""")
+
+
     # Seed policies
     c.execute("SELECT COUNT(*) FROM policies")
     if c.fetchone()[0] == 0:
@@ -392,6 +497,93 @@ def init_db():
         for p in payments:
             c.execute("INSERT INTO payments (ref, employee_id, payment_type, description, amount, status, payment_method, payment_date) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", p)
         conn.commit()
+
+    # Seed letters
+    c.execute("SELECT COUNT(*) FROM letters")
+    if c.fetchone()[0] == 0:
+        letters_seed = [
+            ("LTR-2026-001", "E001", "employment_certificate", "Bank loan application", "en", "Al Rajhi Bank", "issued", "E005"),
+            ("LTR-2026-002", "E004", "salary_certificate", "Apartment rental", "en", "Real Estate Agent", "issued", "E002"),
+            ("LTR-2026-003", "E006", "experience_letter", "Visa application", "en", "Embassy of UAE", "pending", None),
+        ]
+        for lt in letters_seed:
+            c.execute("INSERT INTO letters (ref, employee_id, letter_type, purpose, language, addressed_to, status, issued_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", lt)
+        conn.commit()
+
+    # Seed contracts
+    c.execute("SELECT COUNT(*) FROM contracts")
+    if c.fetchone()[0] == 0:
+        contracts_seed = [
+            ("E001", "unlimited", "2020-03-15", None, "2020-06-15", None, 16500, "active"),
+            ("E002", "unlimited", "2019-06-01", None, "2019-09-01", None, 24500, "active"),
+            ("E003", "unlimited", "2018-01-10", None, "2018-04-10", None, 22000, "active"),
+            ("E004", "fixed", "2023-08-20", "2025-08-20", "2023-11-20", "2025-08-20", 15000, "active"),
+            ("E005", "unlimited", "2017-03-01", None, "2017-06-01", None, 30000, "active"),
+            ("E006", "fixed", "2024-01-15", "2026-01-15", "2024-04-15", "2026-01-15", 14500, "active"),
+            ("E007", "unlimited", "2022-11-01", None, "2023-02-01", None, 13000, "active"),
+        ]
+        for ct in contracts_seed:
+            c.execute("INSERT INTO contracts (employee_id, contract_type, start_date, end_date, probation_end, renewal_date, salary, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", ct)
+        conn.commit()
+
+    # Seed assets
+    c.execute("SELECT COUNT(*) FROM assets")
+    if c.fetchone()[0] == 0:
+        assets_seed = [
+            ("AST-001", "laptop", "MacBook Pro 16-inch", "SN-MBP2024-001", "E001", "2024-01-15", "good", "assigned"),
+            ("AST-002", "laptop", "Dell XPS 15", "SN-DELL2024-002", "E004", "2024-03-10", "good", "assigned"),
+            ("AST-003", "phone", "iPhone 15 Pro", "SN-IP15-003", "E005", "2024-06-01", "good", "assigned"),
+            ("AST-004", "monitor", "LG UltraWide 34-inch", "SN-LG34-004", "E001", "2024-01-15", "good", "assigned"),
+            ("AST-005", "vehicle", "Toyota Camry 2024", "VIN-TC2024-005", "E005", "2024-01-01", "good", "assigned"),
+            ("AST-006", "access_card", "Building Access Card", "AC-006", "E003", "2023-01-10", "good", "assigned"),
+            ("AST-007", "laptop", "ThinkPad X1 Carbon", "SN-TP2023-007", None, None, "good", "available"),
+        ]
+        for a in assets_seed:
+            c.execute("INSERT INTO assets (ref, asset_type, name, serial_number, assigned_to, assigned_date, condition, status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", a)
+        conn.commit()
+
+    # Seed shifts
+    c.execute("SELECT COUNT(*) FROM shifts")
+    if c.fetchone()[0] == 0:
+        shifts_seed = [
+            ("Morning", "08:00", "17:00", 60, 0, 0, "active"),
+            ("Evening", "14:00", "23:00", 60, 0, 10, "active"),
+            ("Night", "22:00", "07:00", 60, 1, 25, "active"),
+            ("Ramadan", "10:00", "15:00", 30, 0, 0, "active"),
+            ("Split", "08:00", "12:00", 0, 0, 0, "active"),
+        ]
+        for sh in shifts_seed:
+            c.execute("INSERT INTO shifts (name, start_time, end_time, break_minutes, is_night_shift, differential_pct, status) VALUES (%s,%s,%s,%s,%s,%s,%s)", sh)
+        conn.commit()
+
+    # Seed employee shifts
+    c.execute("SELECT COUNT(*) FROM employee_shifts")
+    if c.fetchone()[0] == 0:
+        eshifts = [
+            ("E001", 1, "2026-01-01"), ("E002", 1, "2026-01-01"), ("E003", 1, "2026-01-01"),
+            ("E004", 1, "2026-01-01"), ("E005", 1, "2026-01-01"), ("E006", 1, "2026-01-01"),
+            ("E007", 2, "2026-01-01"),
+        ]
+        for es in eshifts:
+            c.execute("INSERT INTO employee_shifts (employee_id, shift_id, effective_date) VALUES (%s,%s,%s)", es)
+        conn.commit()
+
+    # Seed iqama/visa
+    c.execute("SELECT COUNT(*) FROM iqama_visa")
+    if c.fetchone()[0] == 0:
+        iqama_seed = [
+            ("E001", "iqama", "2487654321", "2024-06-15", "2026-06-15", "valid", 650),
+            ("E001", "passport", "A12345678", "2022-01-10", "2032-01-10", "valid", 0),
+            ("E004", "iqama", "2498765432", "2024-08-20", "2026-08-20", "valid", 650),
+            ("E004", "work_visa", "WV-2024-1234", "2024-08-01", "2026-08-01", "valid", 2000),
+            ("E006", "iqama", "2412345678", "2024-01-15", "2026-01-15", "expiring_soon", 650),
+            ("E006", "medical_insurance", "MI-2026-006", "2025-06-01", "2026-06-01", "valid", 1500),
+            ("E007", "iqama", "2476543210", "2025-03-01", "2027-03-01", "valid", 650),
+        ]
+        for iv in iqama_seed:
+            c.execute("INSERT INTO iqama_visa (employee_id, document_type, document_number, issue_date, expiry_date, status, cost) VALUES (%s,%s,%s,%s,%s,%s,%s)", iv)
+        conn.commit()
+
 
     conn.close()
 
@@ -1993,4 +2185,457 @@ def _create_notification(employee_id, ntype, title, message):
         conn.close()
     except Exception:
         pass
+
+
+
+# ============================================================
+# LETTER GENERATION
+# ============================================================
+
+def generate_letter(employee_id, letter_type, purpose=None, addressed_to=None, language="en"):
+    """Generate an HR letter for an employee."""
+    conn = get_db()
+    c = conn.cursor()
+    emp = get_employee(employee_id)
+    if not emp:
+        conn.close()
+        return None
+
+    c.execute("SELECT COUNT(*) FROM letters WHERE employee_id=%s", (employee_id,))
+    count = c.fetchone()[0] + 1
+    ref = f"LTR-{date.today().year}-{count:03d}"
+
+    # Build content data
+    content_data = {
+        "employee_name": emp["name"],
+        "employee_name_ar": emp.get("name_ar", ""),
+        "employee_id": employee_id,
+        "position": emp.get("position", ""),
+        "department": emp.get("department", ""),
+        "join_date": emp.get("join_date", ""),
+        "nationality": emp.get("nationality", ""),
+        "basic_salary": emp.get("basic_salary", 0),
+        "housing_allowance": emp.get("housing_allowance", 0),
+        "transport_allowance": emp.get("transport_allowance", 0),
+        "total_salary": (emp.get("basic_salary", 0) or 0) + (emp.get("housing_allowance", 0) or 0) + (emp.get("transport_allowance", 0) or 0),
+        "grade": emp.get("grade", ""),
+        "letter_date": str(date.today()),
+        "purpose": purpose or "",
+        "addressed_to": addressed_to or "To Whom It May Concern",
+    }
+
+    c.execute("""INSERT INTO letters (ref, employee_id, letter_type, purpose, language, addressed_to, content_data, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,'issued')""",
+        (ref, employee_id, letter_type, purpose, language, addressed_to or "To Whom It May Concern",
+         json.dumps(content_data)))
+    conn.commit()
+    conn.close()
+    _create_notification(employee_id, "letter", f"Letter Generated: {ref}",
+        f"Your {letter_type.replace('_', ' ').title()} has been generated.")
+    content_data["ref"] = ref
+    return content_data
+
+
+def get_employee_letters(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM letters WHERE employee_id=%s ORDER BY created_at DESC", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+LETTER_TYPES = ["employment_certificate", "salary_certificate", "experience_letter", "noc_letter", "promotion_letter", "bank_letter"]
+
+
+# ============================================================
+# CONTRACT MANAGEMENT
+# ============================================================
+
+def get_employee_contract(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM contracts WHERE employee_id=%s AND status='active' ORDER BY start_date DESC LIMIT 1", (employee_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def get_expiring_contracts(days_ahead=90):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT c.*, e.name, e.department FROM contracts c
+        JOIN employees e ON c.employee_id = e.id
+        WHERE c.contract_type='fixed' AND c.status='active'
+        AND c.end_date IS NOT NULL
+        AND c.end_date <= (CURRENT_DATE + INTERVAL '%s days')::TEXT
+        ORDER BY c.end_date""", (days_ahead,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def renew_contract(employee_id, new_end_date, new_salary=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""UPDATE contracts SET end_date=%s, renewal_date=%s, salary=COALESCE(%s, salary)
+        WHERE employee_id=%s AND status='active'""",
+        (new_end_date, new_end_date, new_salary, employee_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_all_contracts():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT c.*, e.name, e.department, e.position FROM contracts c
+        JOIN employees e ON c.employee_id = e.id ORDER BY c.start_date DESC""")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+# ============================================================
+# ASSET TRACKING
+# ============================================================
+
+def get_employee_assets(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM assets WHERE assigned_to=%s AND status='assigned' ORDER BY assigned_date DESC", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_all_assets(status_filter=None):
+    conn = get_db()
+    c = conn.cursor()
+    if status_filter:
+        c.execute("""SELECT a.*, e.name as assigned_name FROM assets a
+            LEFT JOIN employees e ON a.assigned_to = e.id WHERE a.status=%s ORDER BY a.ref""", (status_filter,))
+    else:
+        c.execute("""SELECT a.*, e.name as assigned_name FROM assets a
+            LEFT JOIN employees e ON a.assigned_to = e.id ORDER BY a.ref""")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def assign_asset(ref, employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE assets SET assigned_to=%s, assigned_date=%s, status='assigned' WHERE ref=%s",
+        (employee_id, str(date.today()), ref))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def return_asset(ref):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE assets SET assigned_to=NULL, status='available' WHERE ref=%s", (ref,))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ============================================================
+# SHIFT SCHEDULING
+# ============================================================
+
+def get_all_shifts():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM shifts WHERE status='active' ORDER BY start_time")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_employee_shift(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT es.*, s.name as shift_name, s.start_time, s.end_time, s.break_minutes,
+        s.is_night_shift, s.differential_pct
+        FROM employee_shifts es JOIN shifts s ON es.shift_id = s.id
+        WHERE es.employee_id=%s AND (es.end_date IS NULL OR es.end_date >= CURRENT_DATE::TEXT)
+        ORDER BY es.effective_date DESC LIMIT 1""", (employee_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def assign_shift(employee_id, shift_id, effective_date=None):
+    conn = get_db()
+    c = conn.cursor()
+    eff = effective_date or str(date.today())
+    # End current shift
+    c.execute("UPDATE employee_shifts SET end_date=%s WHERE employee_id=%s AND end_date IS NULL", (eff, employee_id))
+    c.execute("INSERT INTO employee_shifts (employee_id, shift_id, effective_date) VALUES (%s,%s,%s)",
+        (employee_id, shift_id, eff))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_team_shifts(manager_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT e.id, e.name, e.department, s.name as shift_name, s.start_time, s.end_time, s.is_night_shift
+        FROM employees e
+        LEFT JOIN employee_shifts es ON e.id = es.employee_id AND (es.end_date IS NULL OR es.end_date >= CURRENT_DATE::TEXT)
+        LEFT JOIN shifts s ON es.shift_id = s.id
+        WHERE e.manager_id=%s ORDER BY e.name""", (manager_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+# ============================================================
+# REPORTS & ANALYTICS
+# ============================================================
+
+def get_hr_analytics():
+    """Comprehensive HR analytics for reports dashboard."""
+    conn = get_db()
+    c = conn.cursor()
+    result = {}
+
+    # Headcount
+    c.execute("SELECT COUNT(*) FROM employees")
+    result["total_employees"] = c.fetchone()[0]
+
+    c.execute("SELECT department, COUNT(*) as cnt FROM employees GROUP BY department ORDER BY cnt DESC")
+    result["by_department"] = _fetchall(c)
+
+    c.execute("SELECT nationality, COUNT(*) as cnt FROM employees GROUP BY nationality ORDER BY cnt DESC")
+    result["by_nationality"] = _fetchall(c)
+
+    # Leave utilization
+    c.execute("""SELECT
+        SUM(CASE WHEN status='approved' THEN days ELSE 0 END) as approved_days,
+        SUM(CASE WHEN status='pending' THEN days ELSE 0 END) as pending_days,
+        SUM(CASE WHEN status='rejected' THEN days ELSE 0 END) as rejected_days,
+        COUNT(*) as total_requests
+        FROM leave_requests""")
+    result["leave_stats"] = _fetchone(c)
+
+    # Salary costs
+    c.execute("""SELECT
+        SUM(basic_salary + housing_allowance + transport_allowance) as total_monthly_cost,
+        AVG(basic_salary + housing_allowance + transport_allowance) as avg_salary,
+        department, SUM(basic_salary + housing_allowance + transport_allowance) as dept_cost
+        FROM employees GROUP BY department""")
+    result["salary_by_dept"] = _fetchall(c)
+
+    c.execute("SELECT SUM(basic_salary + housing_allowance + transport_allowance) as total FROM employees")
+    result["total_monthly_payroll"] = c.fetchone()[0] or 0
+
+    # Turnover (exit requests)
+    c.execute("SELECT COUNT(*) FROM exit_requests WHERE status IN ('initiated', 'in_progress')")
+    result["active_exits"] = c.fetchone()[0]
+
+    # Asset stats
+    c.execute("SELECT status, COUNT(*) as cnt FROM assets GROUP BY status")
+    result["asset_stats"] = _fetchall(c)
+
+    # Expiring documents
+    c.execute("""SELECT COUNT(*) FROM iqama_visa
+        WHERE expiry_date <= (CURRENT_DATE + INTERVAL '90 days')::TEXT AND status != 'expired'""")
+    result["expiring_docs_90d"] = c.fetchone()[0]
+
+    conn.close()
+    return result
+
+
+def get_monthly_payroll_summary():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT e.id, e.name, e.department, e.basic_salary, e.housing_allowance, e.transport_allowance,
+        (e.basic_salary + e.housing_allowance + e.transport_allowance) as gross,
+        COALESCE(l.monthly_installment, 0) as loan_deduction
+        FROM employees e
+        LEFT JOIN loans l ON e.id = l.employee_id AND l.status = 'active'
+        ORDER BY e.department, e.name""")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+# ============================================================
+# EMPLOYEE DIRECTORY
+# ============================================================
+
+def get_employee_directory(search=None, department=None):
+    conn = get_db()
+    c = conn.cursor()
+    query = """SELECT id, name, name_ar, position, department, email, phone, grade,
+        manager_id, nationality FROM employees WHERE 1=1"""
+    params = []
+    if search:
+        query += " AND (LOWER(name) LIKE %s OR LOWER(position) LIKE %s OR LOWER(department) LIKE %s OR id LIKE %s)"
+        s = f"%{search.lower()}%"
+        params.extend([s, s, s, s])
+    if department:
+        query += " AND LOWER(department) = %s"
+        params.append(department.lower())
+    query += " ORDER BY name"
+    c.execute(query, params)
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_org_chart():
+    """Get hierarchical org data."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT id, name, position, department, manager_id, grade FROM employees ORDER BY id")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+# ============================================================
+# IQAMA / VISA TRACKING
+# ============================================================
+
+def get_employee_documents_visa(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM iqama_visa WHERE employee_id=%s ORDER BY expiry_date", (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_expiring_iqama_visa(days_ahead=90):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT iv.*, e.name, e.department FROM iqama_visa iv
+        JOIN employees e ON iv.employee_id = e.id
+        WHERE iv.expiry_date <= (CURRENT_DATE + INTERVAL '%s days')::TEXT
+        AND iv.status != 'expired'
+        ORDER BY iv.expiry_date""", (days_ahead,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def renew_iqama_visa(doc_id, new_expiry, cost=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE iqama_visa SET expiry_date=%s, status='valid', cost=COALESCE(%s, cost) WHERE id=%s",
+        (new_expiry, cost, doc_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+# ============================================================
+# EXIT / OFFBOARDING
+# ============================================================
+
+def initiate_exit(employee_id, exit_type="resignation", reason=None, last_working_day=None):
+    conn = get_db()
+    c = conn.cursor()
+
+    emp = get_employee(employee_id)
+    if not emp:
+        conn.close()
+        return None
+
+    c.execute("SELECT COUNT(*) FROM exit_requests WHERE employee_id=%s", (employee_id,))
+    count = c.fetchone()[0] + 1
+    ref = f"EXIT-{date.today().year}-{count:03d}"
+
+    if not last_working_day:
+        last_working_day = str(date.today() + timedelta(days=30))
+
+    # Clearance checklist
+    clearance = {
+        "it_assets": "pending",
+        "access_cards": "pending",
+        "finance_clearance": "pending",
+        "hr_documents": "pending",
+        "knowledge_transfer": "pending",
+        "manager_signoff": "pending",
+    }
+
+    # Calculate final settlement
+    eos = calculate_end_of_service(employee_id, exit_type)
+    total_salary = (emp.get("basic_salary", 0) or 0) + (emp.get("housing_allowance", 0) or 0) + (emp.get("transport_allowance", 0) or 0)
+    leave_days = emp.get("annual_leave", 0) or 0
+    daily_rate = total_salary / 30
+    leave_encashment = daily_rate * leave_days
+
+    settlement = {
+        "eos_amount": eos.get("total_gratuity", 0) if eos else 0,
+        "leave_encashment": round(leave_encashment, 2),
+        "pending_salary": round(total_salary, 2),
+        "total_settlement": round((eos.get("total_gratuity", 0) if eos else 0) + leave_encashment + total_salary, 2),
+    }
+
+    c.execute("""INSERT INTO exit_requests (ref, employee_id, exit_type, reason, last_working_day, clearance_status, final_settlement, status)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,'initiated')""",
+        (ref, employee_id, exit_type, reason, last_working_day, json.dumps(clearance), json.dumps(settlement)))
+    conn.commit()
+    conn.close()
+
+    _create_notification(employee_id, "exit", f"Exit Request: {ref}",
+        f"Your {exit_type} request has been initiated. Last working day: {last_working_day}")
+    return {"ref": ref, "clearance": clearance, "settlement": settlement, "last_working_day": last_working_day}
+
+
+def get_exit_request(employee_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT er.*, e.name, e.department, e.position FROM exit_requests er
+        JOIN employees e ON er.employee_id = e.id
+        WHERE er.employee_id=%s ORDER BY er.initiated_at DESC LIMIT 1""", (employee_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def get_all_exit_requests():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT er.*, e.name, e.department, e.position FROM exit_requests er
+        JOIN employees e ON er.employee_id = e.id ORDER BY er.initiated_at DESC""")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def update_clearance_item(ref, item, status):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT clearance_status FROM exit_requests WHERE ref=%s", (ref,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        return False
+    clearance = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    clearance[item] = status
+    # Check if all cleared
+    all_cleared = all(v == "cleared" for v in clearance.values())
+    new_status = "cleared" if all_cleared else "in_progress"
+    c.execute("UPDATE exit_requests SET clearance_status=%s, status=%s WHERE ref=%s",
+        (json.dumps(clearance), new_status, ref))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def complete_exit(ref):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE exit_requests SET status='completed', completed_at=NOW() WHERE ref=%s", (ref,))
+    conn.commit()
+    conn.close()
+    return True
 

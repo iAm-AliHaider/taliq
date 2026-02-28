@@ -49,6 +49,22 @@ import PaymentListCard from "./taliq/PaymentListCard";
 import { SalaryBreakdownCard } from "./taliq/SalaryBreakdownCard";
 import { GOSICard } from "./taliq/GOSICard";
 import { EndOfServiceCard } from "./taliq/EndOfServiceCard";
+import { LetterCard } from "./taliq/LetterCard";
+import { LetterListCard } from "./taliq/LetterListCard";
+import { ContractCard } from "./taliq/ContractCard";
+import { ContractListCard } from "./taliq/ContractListCard";
+import { AssetListCard } from "./taliq/AssetListCard";
+import { AssetInventoryCard } from "./taliq/AssetInventoryCard";
+import { ShiftCard } from "./taliq/ShiftCard";
+import { TeamShiftCard } from "./taliq/TeamShiftCard";
+import { HRReportCard } from "./taliq/HRReportCard";
+import { PayrollSummaryCard } from "./taliq/PayrollSummaryCard";
+import { DirectoryCard } from "./taliq/DirectoryCard";
+import { OrgChartCard } from "./taliq/OrgChartCard";
+import { IqamaVisaCard } from "./taliq/IqamaVisaCard";
+import { ExpiringDocsCard } from "./taliq/ExpiringDocsCard";
+import { ExitCard } from "./taliq/ExitCard";
+import { ExitListCard } from "./taliq/ExitListCard";
 
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
@@ -96,6 +112,22 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   SalaryBreakdownCard,
   GOSICard,
   EndOfServiceCard,
+  LetterCard,
+  LetterListCard,
+  ContractCard,
+  ContractListCard,
+  AssetListCard,
+  AssetInventoryCard,
+  ShiftCard,
+  TeamShiftCard,
+  HRReportCard,
+  PayrollSummaryCard,
+  DirectoryCard,
+  OrgChartCard,
+  IqamaVisaCard,
+  ExpiringDocsCard,
+  ExitCard,
+  ExitListCard,
 };
 
 interface Props {
