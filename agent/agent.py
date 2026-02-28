@@ -163,7 +163,8 @@ async def _send_ui(component: str, props: dict, category: str | None = None):
                 "component": component,
                 "props": props,
                 "category": category or component,
-            }
+            },
+            default=str,
         ).encode("utf-8")
         await _room_ref.local_participant.publish_data(
             payload, topic="ui_sync", reliable=True
@@ -2006,15 +2007,24 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"Connected to room: {ctx.room.name}, metadata: {ctx.room.metadata}")
 
     employee_id = DEFAULT_EMPLOYEE_ID
-    if ctx.room.metadata:
+    lang = "en"
+    # Try room metadata first, then participant metadata as fallback
+    meta_sources = [ctx.room.metadata]
+    for p in ctx.room.remote_participants.values():
+        if p.metadata:
+            meta_sources.append(p.metadata)
+    for meta_str in meta_sources:
+        if not meta_str:
+            continue
         try:
-            metadata = json.loads(ctx.room.metadata)
-            employee_id = metadata.get("employee_id", DEFAULT_EMPLOYEE_ID)
-            lang = metadata.get("lang", "en")
-            logger.info(f"Language: {lang}")
+            metadata = json.loads(meta_str)
+            if metadata.get("employee_id"):
+                employee_id = metadata["employee_id"]
+                lang = metadata.get("lang", "en")
+                logger.info(f"Got employee_id={employee_id}, lang={lang} from metadata")
+                break
         except (json.JSONDecodeError, TypeError):
-            pass
-    lang = locals().get("lang", "en")
+            continue
     set_current_employee_id(employee_id)
 
     session = AgentSession(
