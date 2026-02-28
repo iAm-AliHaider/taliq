@@ -529,20 +529,47 @@ export default function AdminPage() {
                             <div key={key} className="col-span-2 md:col-span-3 lg:col-span-4">
                               <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">{label}</p>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                {Object.entries(value as Record<string, any>).map(([sk, sv]) => (
-                                  <div key={sk} className="bg-gray-50 rounded-lg p-2">
-                                    <span className="text-[10px] text-gray-400 block capitalize">{sk.replace(/_/g, " ")}</span>
-                                    {isEditing ? (
-                                      <input type="number" value={sv} onChange={e => {
-                                        const newDraft = { ...policyDraft };
-                                        (newDraft[key] as any)[sk] = Number(e.target.value);
-                                        setPolicyDraft(newDraft);
-                                      }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
-                                    ) : (
-                                      <span className="text-sm font-bold text-gray-900">{sv}</span>
-                                    )}
-                                  </div>
-                                ))}
+                                {Object.entries(value as Record<string, any>).map(([sk, sv]) => {
+                                  if (typeof sv === "object" && sv !== null && !Array.isArray(sv)) {
+                                    return (
+                                      <div key={sk} className="col-span-2 md:col-span-4">
+                                        <p className="text-[10px] text-gray-400 capitalize font-medium mb-1">{sk.replace(/_/g, " ")}</p>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                          {Object.entries(sv as Record<string, any>).map(([dk, dv]) => (
+                                            <div key={dk} className="bg-white rounded-lg p-2 border border-gray-100">
+                                              <span className="text-[10px] text-gray-400 block capitalize">{dk.replace(/_/g, " ")}</span>
+                                              {isEditing ? (
+                                                <input type={typeof dv === "number" ? "number" : "text"} value={typeof dv === "object" ? JSON.stringify(dv) : dv} onChange={e => {
+                                                  const newDraft = { ...policyDraft };
+                                                  if (!newDraft[key]) newDraft[key] = {};
+                                                  if (!newDraft[key][sk]) newDraft[key][sk] = { ...sv };
+                                                  newDraft[key][sk][dk] = typeof dv === "number" ? Number(e.target.value) : e.target.value;
+                                                  setPolicyDraft(newDraft);
+                                                }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
+                                              ) : (
+                                                <span className="text-sm font-bold text-gray-900">{typeof dv === "object" ? JSON.stringify(dv) : String(dv)}</span>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <div key={sk} className="bg-gray-50 rounded-lg p-2">
+                                      <span className="text-[10px] text-gray-400 block capitalize">{sk.replace(/_/g, " ")}</span>
+                                      {isEditing ? (
+                                        <input type={typeof sv === "number" ? "number" : "text"} value={typeof sv === "boolean" ? String(sv) : sv} onChange={e => {
+                                          const newDraft = { ...policyDraft };
+                                          (newDraft[key] as any)[sk] = typeof sv === "number" ? Number(e.target.value) : typeof sv === "boolean" ? e.target.value === "true" : e.target.value;
+                                          setPolicyDraft(newDraft);
+                                        }} className="w-full text-sm font-bold text-gray-900 bg-white border rounded px-2 py-1 mt-0.5" />
+                                      ) : (
+                                        <span className="text-sm font-bold text-gray-900">{typeof sv === "boolean" ? (sv ? "Yes" : "No") : String(sv)}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           );
