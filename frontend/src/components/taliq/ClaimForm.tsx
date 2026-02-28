@@ -3,10 +3,10 @@ import { useState } from "react";
 
 const CLAIM_TYPES = ["medical", "dental", "vision", "education", "relocation", "other"];
 
-export function ClaimForm({ onAction }: { onAction?: (action: string, payload: any) => void }) {
-  const [claimType, setClaimType] = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
+export function ClaimForm({ prefill, onAction }: { prefill?: { claimType?: string; description?: string; amount?: number }; onAction?: (action: string, payload: any) => void }) {
+  const [claimType, setClaimType] = useState(prefill?.claimType || "");
+  const [description, setDescription] = useState(prefill?.description || "");
+  const [amount, setAmount] = useState(prefill?.amount ? String(prefill.amount) : "");
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = claimType && description && amount && Number(amount) > 0;

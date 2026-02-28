@@ -3,12 +3,12 @@ import { useState } from "react";
 
 const CATEGORIES = ["travel", "meals", "supplies", "transport", "accommodation", "training", "communication", "other"];
 
-export function ExpenseForm({ categories, onAction }: { categories?: string[]; onAction?: (action: string, payload: any) => void }) {
+export function ExpenseForm({ categories, prefill, onAction }: { categories?: string[]; prefill?: { category?: string; description?: string; amount?: number; expense_date?: string }; onAction?: (action: string, payload: any) => void }) {
   const cats = categories?.length ? categories : CATEGORIES;
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split("T")[0]);
+  const [category, setCategory] = useState(prefill?.category || "");
+  const [description, setDescription] = useState(prefill?.description || "");
+  const [amount, setAmount] = useState(prefill?.amount ? String(prefill.amount) : "");
+  const [expenseDate, setExpenseDate] = useState(prefill?.expense_date || new Date().toISOString().split("T")[0]);
   const [submitting, setSubmitting] = useState(false);
 
   const canSubmit = category && description && amount && Number(amount) > 0;
