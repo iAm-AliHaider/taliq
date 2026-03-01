@@ -828,12 +828,99 @@ export default function AdminPage() {
         {/* REPORTS */}
         {tab === "Recruitment" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Recruitment Pipeline</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {/* Simplified tables for admin view */}
-               <StatCard label="Open Positions" value={recruitmentData?.stats?.open_count || 0} color="text-violet-700" />
-               <StatCard label="Total Applications" value={recruitmentData?.applications?.length || 0} color="text-blue-700" />
-               <StatCard label="Total Postings" value={recruitmentData?.stats?.total || 0} color="text-gray-700" />
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 tracking-tight">Recruitment Pipeline</h2>
+              <button onClick={() => setShowCreateJob(!showCreateJob)} className="px-4 py-2 rounded-xl bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600 shadow-sm shadow-violet-200">{showCreateJob ? "Cancel" : "+ New Job"}</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <StatCard label="Open Positions" value={recruitmentData?.stats?.open_count || 0} color="text-violet-700" />
+              <StatCard label="Total Applications" value={recruitmentData?.applications?.length || 0} color="text-blue-700" />
+              <StatCard label="Total Postings" value={recruitmentData?.stats?.total || 0} color="text-gray-700" />
+            </div>
+            {showCreateJob && (
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                <h3 className="text-sm font-bold text-gray-900">Create Job Posting</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <input placeholder="Job Title *" value={newJob.title} onChange={e => setNewJob({...newJob, title: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                  <input placeholder="Department *" value={newJob.department} onChange={e => setNewJob({...newJob, department: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                  <input placeholder="Salary Range (e.g. 10,000-15,000 SAR)" value={newJob.salary_range} onChange={e => setNewJob({...newJob, salary_range: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                  <input placeholder="Location" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                  <select value={newJob.employment_type} onChange={e => setNewJob({...newJob, employment_type: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200">
+                    <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="internship">Internship</option>
+                  </select>
+                </div>
+                <textarea placeholder="Description" value={newJob.description} onChange={e => setNewJob({...newJob, description: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-16 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                <textarea placeholder="Requirements" value={newJob.requirements} onChange={e => setNewJob({...newJob, requirements: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-14 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
+                <button onClick={async () => { if (!newJob.title || !newJob.department) return; await fetch("/api/admin?action=create_job", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(newJob) }); setShowCreateJob(false); setNewJob({title:"",department:"",description:"",requirements:"",salary_range:"",location:"Riyadh",employment_type:"full_time"}); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm shadow-emerald-200">Create Posting</button>
+              </div>
+            )}
+            {/* Job Postings Table */}
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Job Postings</h3></div>
+              <div className="max-h-[350px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0"><tr>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Ref</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Title</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Dept</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Location</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Salary</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Apps</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Status</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(recruitmentData?.jobs || []).map((j: any) => (
+                      <tr key={j.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 font-mono text-gray-400">{j.ref}</td>
+                        <td className="px-4 py-2 font-semibold text-gray-900">{j.title}</td>
+                        <td className="px-4 py-2 text-gray-600">{j.department}</td>
+                        <td className="px-4 py-2 text-gray-600">{j.location}</td>
+                        <td className="px-4 py-2 text-emerald-600 font-medium">{j.salary_range}</td>
+                        <td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[9px] font-semibold">{j.app_count}</span></td>
+                        <td className="px-4 py-2"><Badge text={j.status} color={j.status === "open" ? "emerald" : "gray"} /></td>
+                        <td className="px-4 py-2">
+                          {j.status === "open" && <button onClick={async () => { await fetch("/api/admin?action=update_job_status", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ job_id: j.id, status: "closed" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-red-500 hover:underline">Close</button>}
+                          {j.status !== "open" && <button onClick={async () => { await fetch("/api/admin?action=update_job_status", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ job_id: j.id, status: "open" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-emerald-500 hover:underline">Reopen</button>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {/* Applications Table */}
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Applications ({(recruitmentData?.applications || []).length})</h3></div>
+              <div className="max-h-[350px] overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0"><tr>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Ref</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Candidate</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Position</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Stage</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Score</th>
+                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(recruitmentData?.applications || []).map((a: any) => (
+                      <tr key={a.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 font-mono text-gray-400">{a.ref}</td>
+                        <td className="px-4 py-2"><div className="font-semibold text-gray-900">{a.candidate_name}</div><div className="text-[10px] text-gray-400">{a.candidate_email}</div></td>
+                        <td className="px-4 py-2 text-gray-600">{a.job_title}</td>
+                        <td className="px-4 py-2"><Badge text={a.stage} color={a.stage === "hired" ? "emerald" : a.stage === "rejected" ? "red" : a.stage === "offer" ? "violet" : a.stage === "interview" ? "amber" : "blue"} /></td>
+                        <td className="px-4 py-2">{a.score > 0 ? <span className="font-bold">{a.score}%</span> : <span className="text-gray-300">--</span>}</td>
+                        <td className="px-4 py-2 space-x-2">
+                          {a.stage === "screening" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "interview", status: "shortlisted" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-amber-600 hover:underline font-semibold">Shortlist</button>}
+                          {a.stage === "interview" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "offer", status: "offered" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-violet-600 hover:underline font-semibold">Make Offer</button>}
+                          {a.stage === "offer" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "hired", status: "hired" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-emerald-600 hover:underline font-semibold">Hire</button>}
+                          {a.stage !== "rejected" && a.stage !== "hired" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "rejected", status: "rejected" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-red-400 hover:underline">Reject</button>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -859,7 +946,7 @@ export default function AdminPage() {
                   <input placeholder="Radius (meters)" type="number" value={newFence.radius_meters} onChange={e => setNewFence({...newFence, radius_meters: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
                   <input placeholder="Description" value={newFence.description} onChange={e => setNewFence({...newFence, description: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
                 </div>
-                <button onClick={async () => { if (!newFence.name || !newFence.latitude || !newFence.longitude) return; await fetch("/api/admin?action=create_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({...newFence, latitude: parseFloat(newFence.latitude), longitude: parseFloat(newFence.longitude), radius_meters: parseInt(newFence.radius_meters)}) }); setShowCreateFence(false); setNewFence({ name:"", latitude:"", longitude:"", radius_meters:"200", address:"", description:"" }); adminFetch("geofences").then(d => d && setGeofenceData(d)); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm shadow-emerald-200">
+                <button onClick={async () => { if (!newFence.name || !newFence.latitude || !newFence.longitude) return; await fetch("/api/admin?action=create_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({...newFence, latitude: parseFloat(newFence.latitude), longitude: parseFloat(newFence.longitude), radius_meters: parseInt(newFence.radius_meters)}) }); setShowCreateFence(false); setNewFence({ name:"", latitude:"", longitude:"", radius_meters:"200", address:"", description:"" }); adminFetch("section=geofences").then(d => d && setGeofenceData(d)); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm shadow-emerald-200">
                   Add Location
                 </button>
               </div>
@@ -879,7 +966,7 @@ export default function AdminPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${f.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{f.is_active ? "Active" : "Inactive"}</span>
-                        <button onClick={async () => { await fetch("/api/admin?action=delete_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: f.id }) }); adminFetch("geofences").then(d => d && setGeofenceData(d)); }} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                        <button onClick={async () => { await fetch("/api/admin?action=delete_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: f.id }) }); adminFetch("section=geofences").then(d => d && setGeofenceData(d)); }} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
                       </div>
                     </div>
                   </div>
