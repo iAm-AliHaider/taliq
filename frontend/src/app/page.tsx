@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TaliqProvider } from "@/components/TaliqProvider";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { GenerativePanel } from "@/components/GenerativePanel";
 import { LoginPage } from "@/components/LoginPage";
+import { HelpPanel } from "@/components/HelpPanel";
 import { fetchToken } from "@/lib/livekit-config";
 import { Lang, t, getSavedLang, saveLang, isRTL } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -36,6 +37,8 @@ export default function Home() {
   const [error, setError] = useState<string>("");
   const [authChecked, setAuthChecked] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
+  const [showHelp, setShowHelp] = useState(false);
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -84,6 +87,15 @@ export default function Home() {
     document.documentElement.dir = isRTL(l) ? "rtl" : "ltr";
     document.documentElement.lang = l;
   };
+
+  const handleHelpCommand = useCallback((prompt: string) => {
+    setPendingCommand(prompt);
+  }, []);
+
+  // Clear pending command after it's consumed
+  const consumeCommand = useCallback(() => {
+    setPendingCommand(null);
+  }, []);
 
   if (!authChecked) {
     return (
@@ -159,6 +171,19 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <LanguageSwitcher lang={lang} onSwitch={handleLangSwitch} />
 
+            {/* Help button */}
+            <button
+              onClick={() => setShowHelp(true)}
+              className="p-2 rounded-xl hover:bg-emerald-50 border border-transparent hover:border-emerald-100 transition-all group"
+              title="Voice Commands"
+            >
+              <svg className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </button>
+
             {employee.isManager && (
               <span className="px-2 py-1 rounded-lg bg-violet-50 border border-violet-100 text-[10px] font-semibold text-violet-600">
                 {t("header.manager", lang)}
@@ -180,12 +205,22 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Help Panel */}
+      {showHelp && (
+        <HelpPanel
+          isManager={employee.isManager}
+          isAdmin={employee.isAdmin}
+          onClose={() => setShowHelp(false)}
+          onCommand={handleHelpCommand}
+        />
+      )}
+
       {/* Main */}
       <TaliqProvider token={token}>
         {(components, actions) => (
           <main className="relative z-10 flex-1 overflow-hidden bg-gray-50/50">
             <GenerativePanel components={components} actions={actions} />
-            <VoiceAgent />
+            <VoiceAgent pendingCommand={pendingCommand} onCommandConsumed={consumeCommand} />
           </main>
         )}
       </TaliqProvider>

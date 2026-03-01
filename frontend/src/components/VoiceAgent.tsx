@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Props {
   onQuickAction?: (text: string) => void;
+  pendingCommand?: string | null;
+  onCommandConsumed?: () => void;
 }
 
 function MicIcon({ className = "" }: { className?: string }) {
@@ -77,7 +79,7 @@ const QUICK_ACTIONS = [
   { label: "Travel", color: "text-sky-600 bg-sky-50 border-sky-100", letter: "F", prompt: "Calculate travel allowance for Dubai 3 days" },
 ];
 
-export function VoiceAgent({ onQuickAction }: Props) {
+export function VoiceAgent({ onQuickAction, pendingCommand, onCommandConsumed }: Props) {
   const room = useRoomContext();
   const connectionState = useConnectionState(room);
   const { state: agentState } = useVoiceAssistant();
@@ -183,6 +185,15 @@ export function VoiceAgent({ onQuickAction }: Props) {
       console.error("Failed to send text:", e);
     }
   }, [room]);
+
+  // Send pending command from HelpPanel
+  useEffect(() => {
+    if (pendingCommand && room?.localParticipant) {
+      sendTextToAgent(pendingCommand);
+      onCommandConsumed?.();
+    }
+  }, [pendingCommand, room, sendTextToAgent, onCommandConsumed]);
+
 
   // Audio level animation
   useEffect(() => {
