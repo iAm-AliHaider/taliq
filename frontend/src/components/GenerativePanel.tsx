@@ -155,6 +155,9 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   ApprovalChainCard,
   PendingApprovalsCard,
   WorkflowListCard,
+  AuditLogCard,
+  InterviewResultsCard,
+  NotificationQueueCard,
 };
 
 interface Props {
