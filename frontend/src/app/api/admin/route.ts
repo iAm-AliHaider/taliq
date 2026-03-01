@@ -162,6 +162,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ interviews: interviews, templates: (templates as any[]).map((t: any) => ({ ...t, questions: typeof t.questions === 'string' ? JSON.parse(t.questions) : t.questions })) });
     }
 
+    
+    if (section === "training") {
+      const courses = await sql`SELECT tc.*, 
+        (SELECT COUNT(*) FROM employee_trainings et WHERE et.course_id = tc.id) as enrolled_count,
+        (SELECT COUNT(*) FROM employee_trainings et WHERE et.course_id = tc.id AND et.status = 'completed') as completed_count
+        FROM training_courses tc ORDER BY mandatory DESC, title`;
+      const enrollments = await sql`SELECT et.*, e.name as employee_name, e.department, tc.title as course_title 
+        FROM employee_trainings et 
+        JOIN employees e ON et.employee_id = e.id 
+        JOIN training_courses tc ON et.course_id = tc.id 
+        ORDER BY et.enrollment_date DESC`;
+      return NextResponse.json({ courses, enrollments });
+    }
+
     if (section === "workflows") {
       const workflows = await sql`SELECT * FROM approval_workflows ORDER BY name`;
       const requests = await sql`SELECT ar.*, aw.name as workflow_name, aw.description as workflow_desc FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id ORDER BY ar.created_at DESC LIMIT 50`;
@@ -424,6 +438,49 @@ export async function POST(request: NextRequest) {
     if (action === "delete_workflow") {
       const { id } = body;
       await sql`DELETE FROM approval_workflows WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    
+    if (action === "create_course") {
+      const { title, description, provider, duration_hours, category, mandatory } = body;
+      await sql`INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory, status) 
+        VALUES (${title}, ${description || ''}, ${provider || 'Internal'}, ${duration_hours || 4}, ${category || 'general'}, ${mandatory ? 1 : 0}, 'available')`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update_course") {
+      const { id, title, description, provider, duration_hours, category, mandatory, status } = body;
+      await sql`UPDATE training_courses SET title=${title}, description=${description}, provider=${provider}, 
+        duration_hours=${duration_hours}, category=${category}, mandatory=${mandatory ? 1 : 0}, status=${status} WHERE id=${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_course") {
+      const { id } = body;
+      await sql`DELETE FROM employee_trainings WHERE course_id = ${id}`;
+      await sql`DELETE FROM training_courses WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "enroll_employee") {
+      const { employee_id, course_id } = body;
+      const existing = await sql`SELECT id FROM employee_trainings WHERE employee_id=${employee_id} AND course_id=${course_id} AND status != 'dropped'`;
+      if (existing.length > 0) return NextResponse.json({ error: "Already enrolled" }, { status: 400 });
+      await sql`INSERT INTO employee_trainings (employee_id, course_id) VALUES (${employee_id}, ${course_id})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "complete_enrollment") {
+      const { id, score } = body;
+      const certRef = `CERT-${Date.now()}`;
+      await sql`UPDATE employee_trainings SET status='completed', completion_date=CURRENT_DATE::TEXT, score=${score || null}, certificate_ref=${certRef} WHERE id=${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "drop_enrollment") {
+      const { id } = body;
+      await sql`UPDATE employee_trainings SET status='dropped' WHERE id=${id}`;
       return NextResponse.json({ ok: true });
     }
 

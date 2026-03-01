@@ -93,7 +93,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Templates", "Audit Log"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Templates", "Audit Log"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -177,6 +177,13 @@ export default function AdminPage() {
   const [recruitmentData, setRecruitmentData] = useState<any>(null);
   const [geofenceData, setGeofenceData] = useState<any>(null);
   const [workflowData, setWorkflowData] = useState<any>(null);
+  const [trainingData, setTrainingData] = useState<any>(null);
+  const [showCreateCourse, setShowCreateCourse] = useState(false);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [enrollCourseId, setEnrollCourseId] = useState<number|null>(null);
+  const [enrollEmployeeId, setEnrollEmployeeId] = useState("");
+  const [newCourse, setNewCourse] = useState({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false });
+  const [editingCourse, setEditingCourse] = useState<any>(null);
   const [interviewData, setInterviewData] = useState<any>(null);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateFence, setShowCreateFence] = useState(false);
@@ -1262,6 +1269,190 @@ export default function AdminPage() {
             )}
           </div>
         )}
+
+        {tab === "Training" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-800">Training & Courses</h3>
+                <p className="text-[11px] text-gray-400">{trainingData?.courses?.length || 0} courses, {trainingData?.enrollments?.length || 0} enrollments</p>
+              </div>
+              <button onClick={() => { setShowCreateCourse(true); setEditingCourse(null); setNewCourse({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false }); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-all">+ New Course</button>
+            </div>
+
+            {/* Course Stats */}
+            {trainingData?.courses && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <p className="text-lg font-bold text-emerald-700">{trainingData.courses.length}</p>
+                  <p className="text-[10px] text-emerald-600">Total Courses</p>
+                </div>
+                <div className="p-3 rounded-xl bg-red-50 border border-red-100">
+                  <p className="text-lg font-bold text-red-700">{trainingData.courses.filter((c: any) => c.mandatory).length}</p>
+                  <p className="text-[10px] text-red-600">Mandatory</p>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
+                  <p className="text-lg font-bold text-blue-700">{trainingData.enrollments?.filter((e: any) => e.status === "enrolled").length || 0}</p>
+                  <p className="text-[10px] text-blue-600">Active Enrollments</p>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <p className="text-lg font-bold text-amber-700">{trainingData.enrollments?.filter((e: any) => e.status === "completed").length || 0}</p>
+                  <p className="text-[10px] text-amber-600">Completed</p>
+                </div>
+              </div>
+            )}
+
+            {/* Create/Edit Course Modal */}
+            {showCreateCourse && (
+              <div className="p-4 rounded-xl bg-white border border-emerald-200 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-gray-800">{editingCourse ? "Edit Course" : "Create New Course"}</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input placeholder="Course Title *" value={editingCourse ? editingCourse.title : newCourse.title} onChange={e => editingCourse ? setEditingCourse({...editingCourse, title: e.target.value}) : setNewCourse({...newCourse, title: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Provider" value={editingCourse ? editingCourse.provider : newCourse.provider} onChange={e => editingCourse ? setEditingCourse({...editingCourse, provider: e.target.value}) : setNewCourse({...newCourse, provider: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input type="number" placeholder="Duration (hours)" value={editingCourse ? editingCourse.duration_hours : newCourse.duration_hours} onChange={e => editingCourse ? setEditingCourse({...editingCourse, duration_hours: Number(e.target.value)}) : setNewCourse({...newCourse, duration_hours: Number(e.target.value)})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <select value={editingCourse ? editingCourse.category : newCourse.category} onChange={e => editingCourse ? setEditingCourse({...editingCourse, category: e.target.value}) : setNewCourse({...newCourse, category: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none">
+                    <option value="general">General</option>
+                    <option value="compliance">Compliance</option>
+                    <option value="technical">Technical</option>
+                    <option value="leadership">Leadership</option>
+                    <option value="professional">Professional</option>
+                    <option value="safety">Safety</option>
+                    <option value="language">Language</option>
+                  </select>
+                </div>
+                <textarea placeholder="Description" value={editingCourse ? editingCourse.description : newCourse.description} onChange={e => editingCourse ? setEditingCourse({...editingCourse, description: e.target.value}) : setNewCourse({...newCourse, description: e.target.value})} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" checked={editingCourse ? !!editingCourse.mandatory : newCourse.mandatory} onChange={e => editingCourse ? setEditingCourse({...editingCourse, mandatory: e.target.checked ? 1 : 0}) : setNewCourse({...newCourse, mandatory: e.target.checked})} className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-200" />
+                    Mandatory
+                  </label>
+                  {editingCourse && (
+                    <select value={editingCourse.status} onChange={e => setEditingCourse({...editingCourse, status: e.target.value})} className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm">
+                      <option value="available">Available</option>
+                      <option value="archived">Archived</option>
+                      <option value="draft">Draft</option>
+                    </select>
+                  )}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setShowCreateCourse(false); setEditingCourse(null); }} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200">Cancel</button>
+                  <button onClick={async () => {
+                    const action = editingCourse ? "update_course" : "create_course";
+                    const payload = editingCourse || newCourse;
+                    await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action, ...payload }) });
+                    setShowCreateCourse(false); setEditingCourse(null); setTrainingData(null);
+                    fetch("/api/admin?section=training").then(r => r.json()).then(setTrainingData);
+                  }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600">{editingCourse ? "Save Changes" : "Create Course"}</button>
+                </div>
+              </div>
+            )}
+
+            {/* Enroll Modal */}
+            {showEnrollModal && enrollCourseId && (
+              <div className="p-4 rounded-xl bg-white border border-blue-200 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-gray-800">Enroll Employee in Course</h4>
+                <select value={enrollEmployeeId} onChange={e => setEnrollEmployeeId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm">
+                  <option value="">Select Employee...</option>
+                  {(employees || []).map((emp: any) => <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>)}
+                </select>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setShowEnrollModal(false); setEnrollCourseId(null); setEnrollEmployeeId(""); }} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200">Cancel</button>
+                  <button onClick={async () => {
+                    if (!enrollEmployeeId) return;
+                    const res = await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "enroll_employee", employee_id: enrollEmployeeId, course_id: enrollCourseId }) });
+                    if (!res.ok) { const err = await res.json(); alert(err.error || "Failed"); return; }
+                    setShowEnrollModal(false); setEnrollCourseId(null); setEnrollEmployeeId(""); setTrainingData(null);
+                    fetch("/api/admin?section=training").then(r => r.json()).then(setTrainingData);
+                  }} disabled={!enrollEmployeeId} className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 disabled:opacity-40">Enroll</button>
+                </div>
+              </div>
+            )}
+
+            {/* Course List */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Courses</h4>
+              {(trainingData?.courses || []).map((course: any) => (
+                <div key={course.id} className="p-4 rounded-xl bg-white border border-gray-100 hover:border-emerald-200 transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h5 className="text-sm font-bold text-gray-800">{course.title}</h5>
+                        {course.mandatory ? <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[9px] font-bold">MANDATORY</span> : null}
+                        <span className={"px-1.5 py-0.5 rounded-full text-[9px] font-bold " + (course.status === "available" ? "bg-emerald-100 text-emerald-600" : course.status === "archived" ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-600")}>{course.status}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mb-2">{course.description}</p>
+                      <div className="flex flex-wrap gap-3 text-[10px] text-gray-400">
+                        <span>Provider: <strong className="text-gray-600">{course.provider}</strong></span>
+                        <span>Duration: <strong className="text-gray-600">{course.duration_hours}h</strong></span>
+                        <span>Category: <strong className="text-gray-600">{course.category}</strong></span>
+                        <span>Enrolled: <strong className="text-blue-600">{course.enrolled_count}</strong></span>
+                        <span>Completed: <strong className="text-emerald-600">{course.completed_count}</strong></span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 ml-3">
+                      <button onClick={() => { setEnrollCourseId(course.id); setShowEnrollModal(true); }} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-[10px] text-blue-600 font-semibold hover:bg-blue-100">Enroll</button>
+                      <button onClick={() => { setEditingCourse({...course}); setShowCreateCourse(true); }} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 font-semibold hover:bg-emerald-100">Edit</button>
+                      <button onClick={async () => {
+                        if (!confirm("Delete this course and all enrollments?")) return;
+                        await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "delete_course", id: course.id }) });
+                        setTrainingData(null); fetch("/api/admin?section=training").then(r => r.json()).then(setTrainingData);
+                      }} className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-[10px] text-red-600 font-semibold hover:bg-red-100">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Enrollments Table */}
+            {trainingData?.enrollments?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Enrollments</h4>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-gray-50 text-gray-500">
+                      <th className="px-3 py-2 text-left font-medium">Employee</th>
+                      <th className="px-3 py-2 text-left font-medium">Course</th>
+                      <th className="px-3 py-2 text-left font-medium">Enrolled</th>
+                      <th className="px-3 py-2 text-left font-medium">Status</th>
+                      <th className="px-3 py-2 text-left font-medium">Score</th>
+                      <th className="px-3 py-2 text-left font-medium">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                      {trainingData.enrollments.slice(0, 50).map((en: any) => (
+                        <tr key={en.id} className="border-t border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-3 py-2 font-medium text-gray-700">{en.employee_name}</td>
+                          <td className="px-3 py-2 text-gray-600">{en.course_title}</td>
+                          <td className="px-3 py-2 text-gray-400">{String(en.enrollment_date || "").slice(0, 10)}</td>
+                          <td className="px-3 py-2">
+                            <span className={"px-1.5 py-0.5 rounded-full text-[9px] font-bold " + (en.status === "completed" ? "bg-emerald-100 text-emerald-600" : en.status === "dropped" ? "bg-red-100 text-red-500" : "bg-blue-100 text-blue-600")}>{en.status}</span>
+                          </td>
+                          <td className="px-3 py-2 text-gray-500">{en.score ? `${en.score}%` : "-"}</td>
+                          <td className="px-3 py-2">
+                            {en.status === "enrolled" && (
+                              <div className="flex gap-1">
+                                <button onClick={async () => {
+                                  const score = prompt("Enter score (0-100):", "85");
+                                  if (score === null) return;
+                                  await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "complete_enrollment", id: en.id, score: Number(score) }) });
+                                  setTrainingData(null); fetch("/api/admin?section=training").then(r => r.json()).then(setTrainingData);
+                                }} className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[9px] text-emerald-600 font-semibold hover:bg-emerald-100">Complete</button>
+                                <button onClick={async () => {
+                                  await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "drop_enrollment", id: en.id }) });
+                                  setTrainingData(null); fetch("/api/admin?section=training").then(r => r.json()).then(setTrainingData);
+                                }} className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[9px] text-red-600 font-semibold hover:bg-red-100">Drop</button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "Templates" && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Letter Templates</h2>
