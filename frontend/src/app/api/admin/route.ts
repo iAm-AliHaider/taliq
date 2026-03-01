@@ -156,6 +156,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ geofences: fences });
     }
 
+    if (section === "interviews") {
+      const interviews = await sql`SELECT * FROM interviews ORDER BY started_at DESC`;
+      const templates = await sql`SELECT * FROM interview_templates ORDER BY created_at DESC`;
+      return NextResponse.json({ interviews: interviews, templates: (templates as any[]).map((t: any) => ({ ...t, questions: typeof t.questions === 'string' ? JSON.parse(t.questions) : t.questions })) });
+    }
+
     if (section === "workflows") {
       const workflows = await sql`SELECT * FROM approval_workflows ORDER BY name`;
       const requests = await sql`SELECT ar.*, aw.name as workflow_name, aw.description as workflow_desc FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id ORDER BY ar.created_at DESC LIMIT 50`;
@@ -281,6 +287,35 @@ export async function POST(request: NextRequest) {
     }
 
 
+
+
+    if (action === "create_interview") {
+      const { candidate_name, position, stage } = body;
+      const count = await sql`SELECT COUNT(*) as c FROM interviews`;
+      const ref = `INT-2026-${String(Number((count as any[])[0].c) + 1).padStart(3, '0')}`;
+      await sql`INSERT INTO interviews (ref, candidate_name, position, interviewer_id, stage, total_questions, status)
+        VALUES (${ref}, ${candidate_name}, ${position}, 'E005', ${stage || 'hr_screening'}, 5, 'in_progress')`;
+      return NextResponse.json({ ok: true, ref });
+    }
+
+    if (action === "save_interview_template") {
+      const { name, stage, questions } = body;
+      const id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      await sql`CREATE TABLE IF NOT EXISTS interview_templates (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, stage TEXT NOT NULL,
+        questions JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`INSERT INTO interview_templates (id, name, stage, questions)
+        VALUES (${id}, ${name}, ${stage}, ${JSON.stringify(questions)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET name = ${name}, stage = ${stage}, questions = ${JSON.stringify(questions)}::jsonb, updated_at = NOW()`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_interview_template") {
+      const { id } = body;
+      await sql`DELETE FROM interview_templates WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
 
     if (action === "create_asset") {
       const { name, asset_type, serial_number, assigned_to, condition } = body;

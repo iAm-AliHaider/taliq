@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SettingsPanel from "./settings";
 import TemplatesPanel from "./templates";
 import WorkflowBuilder from "./workflow-builder";
+import InterviewBuilder from "./interview-builder";
 import dynamic from "next/dynamic";
 const RechartsBarChart = dynamic(() => import("recharts").then(m => {
   const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } = m;
@@ -92,7 +93,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Geofencing", "Workflows", "Templates", "Audit Log"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Templates", "Audit Log"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -176,6 +177,7 @@ export default function AdminPage() {
   const [recruitmentData, setRecruitmentData] = useState<any>(null);
   const [geofenceData, setGeofenceData] = useState<any>(null);
   const [workflowData, setWorkflowData] = useState<any>(null);
+  const [interviewData, setInterviewData] = useState<any>(null);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateFence, setShowCreateFence] = useState(false);
   const [showWorkflowBuilder, setShowWorkflowBuilder] = useState(false);
@@ -222,6 +224,7 @@ export default function AdminPage() {
       adminFetch("section=recruitment").then(d => d && setRecruitmentData(d));
       adminFetch("section=geofences").then(d => d && setGeofenceData(d));
       adminFetch("section=workflows").then(d => d && setWorkflowData(d));
+      adminFetch("section=interviews").then(d => d && setInterviewData(d));
     }
   }, [authed]);
 
@@ -1060,6 +1063,16 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+        {tab === "Interviews" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">AI Interviewer</h2>
+            <InterviewBuilder
+              interviews={interviewData?.interviews || []}
+              templates={interviewData?.templates || []}
+              onRefresh={() => adminFetch("section=interviews").then(d => d && setInterviewData(d))}
+            />
+          </div>
+        )}
         {tab === "Geofencing" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1130,6 +1143,7 @@ export default function AdminPage() {
                   await fetch("/api/admin?action=create_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(wf) });
                   setShowWorkflowBuilder(false);
                   adminFetch("section=workflows").then(d => d && setWorkflowData(d));
+      adminFetch("section=interviews").then(d => d && setInterviewData(d));
                 }}
               />
             )}
@@ -1145,8 +1159,10 @@ export default function AdminPage() {
                         <p className="text-[10px] text-gray-400">Entity: {w.entity_type?.replace("_", " ")} &middot; {steps.length} steps</p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${w.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{w.is_active ? "Active" : "Disabled"}</span>
-                      <button onClick={async () => { await fetch("/api/admin?action=toggle_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id, is_active: !w.is_active }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d)); }} className="text-[10px] text-indigo-500 hover:underline">{w.is_active ? "Disable" : "Enable"}</button>
-                      <button onClick={async () => { if (!confirm("Delete this workflow?")) return; await fetch("/api/admin?action=delete_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d)); }} className="text-[10px] text-red-400 hover:underline">Delete</button>
+                      <button onClick={async () => { await fetch("/api/admin?action=toggle_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id, is_active: !w.is_active }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d));
+      adminFetch("section=interviews").then(d => d && setInterviewData(d)); }} className="text-[10px] text-indigo-500 hover:underline">{w.is_active ? "Disable" : "Enable"}</button>
+                      <button onClick={async () => { if (!confirm("Delete this workflow?")) return; await fetch("/api/admin?action=delete_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d));
+      adminFetch("section=interviews").then(d => d && setInterviewData(d)); }} className="text-[10px] text-red-400 hover:underline">Delete</button>
                     </div>
                     <div className="px-5 py-3 flex items-center gap-1 overflow-x-auto">
                       {steps.map((s: any, i: number) => (
