@@ -203,7 +203,7 @@ export default function AdminPage() {
       adminFetch("section=iqama").then(d => d && setIqama(d));
       adminFetch("section=exits").then(d => d && setExits(d));
       adminFetch("section=reports").then(d => d && setReports(d));
-      adminFetch("section=audit_log").then(d => d && setAuditLog(d.entries || []));
+      adminFetch("section=audit_log").then(d => d && d.entries && setAuditLog(d.entries));
     }
   }, [authed]);
 

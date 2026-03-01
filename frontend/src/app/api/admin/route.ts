@@ -134,6 +134,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    if (section === "audit_log") {
+      try {
+        const rows = await sql`SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 100`;
+        return NextResponse.json({ entries: rows });
+      } catch {
+        return NextResponse.json({ entries: [] });
+      }
+    }
+
     return NextResponse.json([]);
   } catch (e: any) {
     console.error("Admin API error:", e.message);
