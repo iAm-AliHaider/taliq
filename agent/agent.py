@@ -34,6 +34,8 @@ from livekit import rtc
 
 import database as db
 
+logger = logging.getLogger('taliq-agent')
+
 # Smart Turn v3.2 — intelligent turn detection
 try:
     from smart_turn import SmartTurnDetector

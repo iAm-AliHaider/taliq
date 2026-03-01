@@ -2456,18 +2456,14 @@ def generate_letter(employee_id, letter_type, purpose=None, addressed_to=None, l
         conn.close()
         return None
 
-    c.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM letters")
-    next_id = c.fetchone()[0]
-    ref = f"LTR-{date.today().year}-{next_id:03d}"
-
-    # Build content data
+    # Build content data (ref assigned after INSERT to avoid UniqueViolation)
     content_data = {
         "employee_name": emp["name"],
         "employee_name_ar": emp.get("name_ar", ""),
         "employee_id": employee_id,
         "position": emp.get("position", ""),
         "department": emp.get("department", ""),
-        "join_date": emp.get("join_date", ""),
+        "join_date": str(emp.get("join_date", "")),
         "nationality": emp.get("nationality", ""),
         "basic_salary": emp.get("basic_salary", 0),
         "housing_allowance": emp.get("housing_allowance", 0),
@@ -2480,9 +2476,12 @@ def generate_letter(employee_id, letter_type, purpose=None, addressed_to=None, l
     }
 
     c.execute("""INSERT INTO letters (ref, employee_id, letter_type, purpose, language, addressed_to, content_data, status)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,'issued')""",
-        (ref, employee_id, letter_type, purpose, language, addressed_to or "To Whom It May Concern",
+        VALUES ('TMP',%s,%s,%s,%s,%s,%s,'issued') RETURNING id""",
+        (employee_id, letter_type, purpose, language, addressed_to or "To Whom It May Concern",
          json.dumps(content_data)))
+    row_id = c.fetchone()[0]
+    ref = f"LTR-{date.today().year}-{row_id:03d}"
+    c.execute("UPDATE letters SET ref=%s WHERE id=%s", (ref, row_id))
     conn.commit()
     conn.close()
     _create_notification(employee_id, "letter", f"Letter Generated: {ref}",
