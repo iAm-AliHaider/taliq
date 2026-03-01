@@ -52,6 +52,7 @@ from edge_tts_plugin import EdgeTTS
 
 # Import all tools and core utilities from modular tools package
 from tools import (
+    acknowledge_announcement,
     # Core
     get_current_employee_id_from_context,
     set_current_employee_id,
@@ -286,6 +287,7 @@ ALL_TOOLS = [
     file_grievance, show_my_grievances,
     # Notifications
     show_notifications,
+    acknowledge_announcement,
     # All Requests
     show_my_requests,
     # Expenses
@@ -526,6 +528,31 @@ async def entrypoint(ctx: JobContext):
         greeting = "Hello! I couldn't find your profile. Please log out and try again."
 
     await session.say(greeting, allow_interruptions=True)
+
+    # Check for unread login announcements
+    try:
+        unread_announcements = db.get_unread_login_announcements(employee_id)
+        if unread_announcements:
+            for ann in unread_announcements[:3]:  # Max 3 announcements at login
+                db.mark_announcement_read(ann["id"], employee_id)
+                await _send_ui("AnnouncementCard", {
+                    "id": ann["id"],
+                    "title": ann["title"],
+                    "content": ann["content"],
+                    "author": ann["author"],
+                    "priority": ann["priority"],
+                    "date": str(ann["created_at"])[:10],
+                    "requireAcknowledge": True,
+                }, "announcement")
+                # Speak the announcement
+                priority_prefix = "Urgent announcement: " if ann["priority"] == "urgent" else "Important announcement: " if ann["priority"] == "important" else ""
+                await session.say(
+                    f"{priority_prefix}{ann['title']}. {ann['content']}. Please acknowledge this announcement.",
+                    allow_interruptions=True
+                )
+                await asyncio.sleep(0.5)
+    except Exception as e:
+        logger.error(f"Error checking login announcements: {e}")
 
     # Auto-show dashboard on connect
     try:

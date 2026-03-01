@@ -142,3 +142,20 @@ async def show_notifications(context: RunContext):
     all_notifs = db.get_all_notifications(emp_id)
     await _send_ui("NotificationCard", {"notifications": all_notifs, "unreadCount": len(notifs)}, "main_card")
     return f"{len(notifs)} unread notification(s)."
+
+
+@function_tool
+async def acknowledge_announcement(context: RunContext, announcement_id: int = 0):
+    """Acknowledge a company announcement. Say 'I acknowledge' or 'acknowledged' to confirm you've read it."""
+    emp_id = get_current_employee_id_from_context()
+    if announcement_id > 0:
+        db.acknowledge_announcement(announcement_id, emp_id)
+        return f"Announcement #{announcement_id} acknowledged. Thank you."
+    # If no ID, acknowledge all unread
+    unread = db.get_unread_login_announcements(emp_id)
+    if not unread:
+        return "No pending announcements to acknowledge."
+    for ann in unread:
+        db.acknowledge_announcement(ann["id"], emp_id)
+    return f"All {len(unread)} announcements acknowledged. Thank you."
+

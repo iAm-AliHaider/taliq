@@ -62,6 +62,7 @@ from tools.performance import (
     file_grievance,
     show_my_grievances,
     show_notifications,
+    acknowledge_announcement,
 )
 
 from tools.manager import (

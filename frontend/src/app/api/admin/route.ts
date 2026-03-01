@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "announcements") {
-      const rows = await sql`SELECT * FROM announcements ORDER BY created_at DESC`;
+      const rows = await sql`SELECT a.*, COALESCE(a.announce_on_login, FALSE) as announce_on_login, COALESCE(a.is_active, TRUE) as is_active FROM announcements a ORDER BY a.created_at DESC`;
       return NextResponse.json(rows);
     }
 
@@ -205,6 +205,43 @@ export async function POST(request: NextRequest) {
       const { category, config } = body;
       await sql`UPDATE policies SET config = ${JSON.stringify(config)}::jsonb, updated_at = NOW(), updated_by = 'admin' WHERE category = ${category}`;
       return NextResponse.json({ ok: true });
+    }
+
+
+    if (action === "acknowledge_announcement") {
+      const { announcement_id, employee_id } = body;
+      await sql`INSERT INTO announcement_reads (announcement_id, employee_id, read_at, acknowledged, acknowledged_at)
+        VALUES (${announcement_id}, ${employee_id}, NOW(), TRUE, NOW())
+        ON CONFLICT (announcement_id, employee_id) DO UPDATE SET acknowledged = TRUE, acknowledged_at = NOW()`;
+      await sql`UPDATE announcements SET acknowledged_count = (
+        SELECT COUNT(*) FROM announcement_reads WHERE announcement_id = ${announcement_id} AND acknowledged = TRUE
+      ) WHERE id = ${announcement_id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "toggle_announce_login") {
+      const { id, value } = body;
+      await sql`UPDATE announcements SET announce_on_login = ${value} WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "toggle_announcement_active") {
+      const { id, value } = body;
+      await sql`UPDATE announcements SET is_active = ${value} WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "get_announcement_reads") {
+      const { id } = body;
+      const reads = await sql`SELECT ar.*, e.name as employee_name, e.department
+        FROM announcement_reads ar JOIN employees e ON e.id = ar.employee_id
+        WHERE ar.announcement_id = ${id} ORDER BY ar.read_at DESC`;
+      const total = await sql`SELECT COUNT(*) as c FROM employees`;
+      return NextResponse.json({
+        reads: reads,
+        total_employees: (total as any[])[0]?.c || 0,
+        acknowledged: (reads as any[]).filter((r: any) => r.acknowledged).length,
+      });
     }
 
     if (action === "create_announcement") {

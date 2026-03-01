@@ -121,9 +121,22 @@ def init_db():
         content TEXT NOT NULL,
         author TEXT,
         priority TEXT DEFAULT 'normal',
+        announce_on_login BOOLEAN DEFAULT FALSE,
+        is_active BOOLEAN DEFAULT TRUE,
         acknowledged_count INTEGER DEFAULT 0,
-        total_count INTEGER DEFAULT 60,
+        total_count INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS announcement_reads (
+        id SERIAL PRIMARY KEY,
+        announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+        employee_id TEXT NOT NULL,
+        read_at TIMESTAMP DEFAULT NOW(),
+        acknowledged BOOLEAN DEFAULT FALSE,
+        acknowledged_at TIMESTAMP,
+        UNIQUE(announcement_id, employee_id)
     )""")
 
     c.execute("""
@@ -1706,6 +1719,102 @@ def request_overtime(emp_id, hours, reason):
 
 
 # ── Interview CRUD ──────────────────────────────────────
+
+
+# ── Announcement Read Tracking ──────────────────────────
+
+def get_unread_login_announcements(employee_id):
+    """Get announcements marked for login that this employee hasn't read."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT a.* FROM announcements a
+        WHERE a.announce_on_login = TRUE AND a.is_active = TRUE
+        AND a.id NOT IN (
+            SELECT ar.announcement_id FROM announcement_reads ar
+            WHERE ar.employee_id = %s AND ar.acknowledged = TRUE
+        )
+        ORDER BY a.priority = 'urgent' DESC, a.priority = 'important' DESC, a.created_at DESC
+    """, (employee_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def mark_announcement_read(announcement_id, employee_id):
+    """Mark an announcement as read (seen) by an employee."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO announcement_reads (announcement_id, employee_id, read_at)
+        VALUES (%s, %s, NOW())
+        ON CONFLICT (announcement_id, employee_id) DO UPDATE SET read_at = NOW()
+    """, (announcement_id, employee_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def acknowledge_announcement(announcement_id, employee_id):
+    """Acknowledge an announcement (confirmed heard/read)."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO announcement_reads (announcement_id, employee_id, read_at, acknowledged, acknowledged_at)
+        VALUES (%s, %s, NOW(), TRUE, NOW())
+        ON CONFLICT (announcement_id, employee_id)
+        DO UPDATE SET acknowledged = TRUE, acknowledged_at = NOW()
+    """, (announcement_id, employee_id))
+    # Update the count on the announcement
+    c.execute("""
+        UPDATE announcements SET acknowledged_count = (
+            SELECT COUNT(*) FROM announcement_reads WHERE announcement_id = %s AND acknowledged = TRUE
+        ) WHERE id = %s
+    """, (announcement_id, announcement_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_announcement_reads(announcement_id):
+    """Get all read/acknowledgment records for an announcement."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT ar.*, e.name as employee_name, e.department
+        FROM announcement_reads ar
+        JOIN employees e ON e.id = ar.employee_id
+        WHERE ar.announcement_id = %s
+        ORDER BY ar.read_at DESC
+    """, (announcement_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_announcement_stats(announcement_id):
+    """Get read/acknowledged stats for an announcement."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) as total FROM employees")
+    total = _fetchone(c)["total"]
+    c.execute("SELECT COUNT(*) as read_count FROM announcement_reads WHERE announcement_id = %s", (announcement_id,))
+    read_count = _fetchone(c)["read_count"]
+    c.execute("SELECT COUNT(*) as ack_count FROM announcement_reads WHERE announcement_id = %s AND acknowledged = TRUE", (announcement_id,))
+    ack_count = _fetchone(c)["ack_count"]
+    conn.close()
+    return {"total_employees": total, "read_count": read_count, "acknowledged_count": ack_count}
+
+
+def set_announce_on_login(announcement_id, value=True):
+    """Toggle announce_on_login flag."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("UPDATE announcements SET announce_on_login = %s WHERE id = %s", (value, announcement_id))
+    conn.commit()
+    conn.close()
+    return True
+
 
 QUESTION_BANK = {
     "hr_screening": [

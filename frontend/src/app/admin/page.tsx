@@ -89,7 +89,7 @@ interface Employee { id: string; name: string; nameAr: string; position: string;
 interface LeaveRequest { ref: string; employeeId: string; employeeName: string; department: string; leaveType: string; startDate: string; endDate: string; days: number; reason: string; status: string; approverId: string; approverName: string; }
 interface Loan { ref: string; employeeId: string; employeeName: string; department: string; loanType: string; amount: number; remaining: number; monthlyInstallment: number; installmentsLeft: number; status: string; }
 interface Document { ref: string; employeeId: string; employeeName: string; documentType: string; status: string; estimatedDate: string; }
-interface Announcement { id: number; title: string; content: string; author: string; priority: string; date: string; }
+interface Announcement { id: number; title: string; content: string; author: string; priority: string; date: string; announce_on_login?: boolean; is_active?: boolean; acknowledged_count?: number; total_count?: number; }
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
@@ -182,6 +182,7 @@ export default function AdminPage() {
   const [showCreateFence, setShowCreateFence] = useState(false);
   const [showWorkflowBuilder, setShowWorkflowBuilder] = useState(false);
   const [showCreateAsset, setShowCreateAsset] = useState(false);
+  const [viewingReads, setViewingReads] = useState<{id: number; data: any} | null>(null);
   const [showCreateShift, setShowCreateShift] = useState(false);
   const [showCreateContract, setShowCreateContract] = useState(false);
   const [renewingIqama, setRenewingIqama] = useState<string|null>(null);
@@ -268,7 +269,7 @@ export default function AdminPage() {
     await adminFetch("?action=create_announcement", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: annTitle, content: annContent, author: "Admin", priority: annPriority }),
+      body: JSON.stringify({ title: annTitle, content: annContent, author: "Admin", priority: annPriority, announce_on_login: (document.getElementById("ann_login_cb") as HTMLInputElement)?.checked || false }),
     });
     setAnnTitle(""); setAnnContent(""); setAnnPriority("normal"); setShowAnnForm(false); setAnnSaving(false);
     loadData();
@@ -638,25 +639,73 @@ export default function AdminPage() {
                   <select value={annPriority} onChange={e => setAnnPriority(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-xs">
                     <option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option>
                   </select>
+                  <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer"><input type="checkbox" id="ann_login_cb" className="rounded border-gray-300 text-indigo-500" /> Announce on login</label>
                   <button onClick={handleCreateAnnouncement} disabled={annSaving} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 disabled:opacity-50">{annSaving ? "Posting..." : "Post"}</button>
                 </div>
               </div>
             )}
             {announcements.map(a => (
-              <div key={a.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
+              <div key={a.id} className={`rounded-2xl border shadow-sm p-4 ${a.is_active === false ? "border-gray-100 bg-gray-50 opacity-60" : "border-gray-200 bg-white"}`}>
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900">{a.title}</h4>
-                    <p className="text-xs text-gray-500 mt-1">{a.content}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">By {a.author} - {a.date}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-semibold text-gray-900">{a.title}</h4>
+                      {a.announce_on_login && <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[8px] font-bold border border-indigo-200">LOGIN</span>}
+                    </div>
+                    <p className="text-xs text-gray-500">{a.content}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <p className="text-[10px] text-gray-400">By {a.author} - {a.date}</p>
+                      {(a.acknowledged_count || 0) > 0 && (
+                        <button onClick={async () => { const res = await fetch("/api/admin?action=get_announcement_reads", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id }) }); const data = await res.json(); setViewingReads({ id: a.id, data }); }} className="text-[10px] text-emerald-600 hover:underline font-medium">{a.acknowledged_count || 0} acknowledged</button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={a.priority} />
-                    <button onClick={() => handleDeleteAnnouncement(a.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge status={a.priority} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={async () => { await fetch("/api/admin?action=toggle_announce_login", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, value: !a.announce_on_login }) }); loadData(); }} className={`px-2 py-0.5 rounded text-[9px] font-semibold border transition-all ${a.announce_on_login ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-gray-50 text-gray-400 border-gray-200 hover:border-indigo-200"}`}>{a.announce_on_login ? "Login: ON" : "Login: OFF"}</button>
+                      <button onClick={async () => { await fetch("/api/admin?action=toggle_announcement_active", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, value: a.is_active === false }) }); loadData(); }} className={`px-2 py-0.5 rounded text-[9px] font-semibold border ${a.is_active === false ? "bg-gray-50 text-gray-400 border-gray-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}`}>{a.is_active === false ? "Inactive" : "Active"}</button>
+                      <button onClick={() => handleDeleteAnnouncement(a.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
+            {/* Reads Modal */}
+            {viewingReads && (
+              <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setViewingReads(null)}>
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                  <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-gray-900">Acknowledgment Status</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-emerald-600 font-semibold">{viewingReads.data.acknowledged}/{viewingReads.data.total_employees} employees</span>
+                      <button onClick={() => setViewingReads(null)} className="text-gray-400 hover:text-gray-600">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="mb-3">
+                      <div className="flex justify-between text-[10px] mb-1"><span className="text-gray-400">Acknowledgment Rate</span><span className="text-emerald-600 font-bold">{Math.round((viewingReads.data.acknowledged / viewingReads.data.total_employees) * 100)}%</span></div>
+                      <div className="h-2 rounded-full bg-gray-100"><div className="h-full rounded-full bg-emerald-500" style={{width: `${(viewingReads.data.acknowledged / viewingReads.data.total_employees) * 100}%`}} /></div>
+                    </div>
+                    <div className="max-h-[40vh] overflow-y-auto divide-y divide-gray-100">
+                      {(viewingReads.data.reads || []).map((r: any, i: number) => (
+                        <div key={i} className="py-2 flex items-center justify-between">
+                          <div><p className="text-xs font-medium text-gray-900">{r.employee_name}</p><p className="text-[10px] text-gray-400">{r.department}</p></div>
+                          <div className="text-right">
+                            {r.acknowledged ? <span className="badge badge-emerald text-[9px]">Acknowledged</span> : <span className="badge badge-gold text-[9px]">Read Only</span>}
+                            <p className="text-[9px] text-gray-400 mt-0.5">{r.acknowledged_at ? String(r.acknowledged_at).slice(0, 16) : String(r.read_at).slice(0, 16)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
