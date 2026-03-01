@@ -171,6 +171,14 @@ export default function AdminPage() {
   const [exits, setExits] = useState<any[]>([]);
   const [reports, setReports] = useState<any>(null);
   const [auditLog, setAuditLog] = useState<any[]>([]);
+
+  const [recruitmentData, setRecruitmentData] = useState<any>(null);
+  const [geofenceData, setGeofenceData] = useState<any>(null);
+  const [workflowData, setWorkflowData] = useState<any>(null);
+  const [showCreateJob, setShowCreateJob] = useState(false);
+  const [showCreateFence, setShowCreateFence] = useState(false);
+  const [newJob, setNewJob] = useState({ title: "", department: "", description: "", requirements: "", salary_range: "", location: "Riyadh", employment_type: "full_time" });
+  const [newFence, setNewFence] = useState({ name: "", latitude: "", longitude: "", radius_meters: "200", address: "", description: "" });
   // Create employee
   const [showCreateEmp, setShowCreateEmp] = useState(false);
   const [newEmp, setNewEmp] = useState<Record<string, string>>({ id: "", name: "", nameAr: "", position: "", department: "", email: "", phone: "", nationality: "Saudi", grade: "", managerId: "", basicSalary: "0", housingAllowance: "0", transportAllowance: "0", pin: "1234" });
@@ -205,6 +213,9 @@ export default function AdminPage() {
       adminFetch("section=exits").then(d => d && setExits(d));
       adminFetch("section=reports").then(d => d && setReports(d));
       adminFetch("section=audit_log").then(d => d && d.entries && setAuditLog(d.entries));
+      adminFetch("section=recruitment").then(d => d && setRecruitmentData(d));
+      adminFetch("section=geofences").then(d => d && setGeofenceData(d));
+      adminFetch("section=workflows").then(d => d && setWorkflowData(d));
     }
   }, [authed]);
 
@@ -820,33 +831,128 @@ export default function AdminPage() {
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Recruitment Pipeline</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {/* Simplified tables for admin view */}
-               <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                 <h3 className="text-sm font-bold mb-3">Active Job Postings</h3>
-                 <div className="text-xs text-gray-400 italic">Job postings management UI...</div>
-               </div>
-               <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                 <h3 className="text-sm font-bold mb-3">Recent Applications</h3>
-                 <div className="text-xs text-gray-400 italic">Application tracking UI...</div>
-               </div>
+               <StatCard label="Open Positions" value={recruitmentData?.stats?.open_count || 0} color="text-violet-700" />
+               <StatCard label="Total Applications" value={recruitmentData?.applications?.length || 0} color="text-blue-700" />
+               <StatCard label="Total Postings" value={recruitmentData?.stats?.total || 0} color="text-gray-700" />
             </div>
           </div>
         )}
         {tab === "Geofencing" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Geofencing & GPS</h2>
-            <p className="text-xs text-gray-500">Manage office locations and attendance boundaries.</p>
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-               <div className="text-xs text-gray-400 italic">Geofence management map and list...</div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 tracking-tight">Geofencing & GPS</h2>
+                <p className="text-xs text-gray-500 mt-1">Manage office locations and attendance boundaries. Employees must clock in from within these zones.</p>
+              </div>
+              <button onClick={() => setShowCreateFence(!showCreateFence)} className="px-4 py-2 rounded-xl bg-teal-500 text-white text-xs font-semibold hover:bg-teal-600 transition-colors shadow-sm shadow-teal-200">
+                {showCreateFence ? "Cancel" : "+ Add Location"}
+              </button>
+            </div>
+            {showCreateFence && (
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                <h3 className="text-sm font-bold text-gray-900">Register New Office Location</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <input placeholder="Location Name" value={newFence.name} onChange={e => setNewFence({...newFence, name: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                  <input placeholder="Address" value={newFence.address} onChange={e => setNewFence({...newFence, address: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                  <input placeholder="Latitude" type="number" step="any" value={newFence.latitude} onChange={e => setNewFence({...newFence, latitude: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                  <input placeholder="Longitude" type="number" step="any" value={newFence.longitude} onChange={e => setNewFence({...newFence, longitude: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                  <input placeholder="Radius (meters)" type="number" value={newFence.radius_meters} onChange={e => setNewFence({...newFence, radius_meters: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                  <input placeholder="Description" value={newFence.description} onChange={e => setNewFence({...newFence, description: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-teal-200" />
+                </div>
+                <button onClick={async () => { if (!newFence.name || !newFence.latitude || !newFence.longitude) return; await fetch("/api/admin?action=create_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({...newFence, latitude: parseFloat(newFence.latitude), longitude: parseFloat(newFence.longitude), radius_meters: parseInt(newFence.radius_meters)}) }); setShowCreateFence(false); setNewFence({ name:"", latitude:"", longitude:"", radius_meters:"200", address:"", description:"" }); adminFetch("geofences").then(d => d && setGeofenceData(d)); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm shadow-emerald-200">
+                  Add Location
+                </button>
+              </div>
+            )}
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900">Office Locations ({(geofenceData?.geofences || []).length})</h3>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {(geofenceData?.geofences || []).map((f: any) => (
+                  <div key={f.id} className="px-5 py-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">{f.name}</h4>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{f.address}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{f.latitude?.toFixed(4)}, {f.longitude?.toFixed(4)} &middot; {f.radius_meters}m radius</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${f.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{f.is_active ? "Active" : "Inactive"}</span>
+                        <button onClick={async () => { await fetch("/api/admin?action=delete_geofence", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: f.id }) }); adminFetch("geofences").then(d => d && setGeofenceData(d)); }} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {(geofenceData?.geofences || []).length === 0 && <div className="px-5 py-8 text-center text-xs text-gray-400">No office locations registered yet.</div>}
+              </div>
             </div>
           </div>
         )}
         {tab === "Workflows" && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Approval Workflows</h2>
-            <p className="text-xs text-gray-500">Define multi-level approval chains for leaves, expenses, and loans.</p>
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-               <div className="text-xs text-gray-400 italic">Workflow builder UI...</div>
+            <p className="text-xs text-gray-500">Multi-level approval chains for leaves, expenses, loans, and exit requests.</p>
+            {/* Workflow Definitions */}
+            <div className="space-y-3">
+              {(workflowData?.workflows || []).map((w: any) => {
+                const steps = typeof w.steps === "string" ? JSON.parse(w.steps) : (w.steps || []);
+                return (
+                  <div key={w.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900">{w.description || w.name}</h3>
+                        <p className="text-[10px] text-gray-400">Entity: {w.entity_type?.replace("_", " ")} &middot; {steps.length} steps</p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${w.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{w.is_active ? "Active" : "Disabled"}</span>
+                    </div>
+                    <div className="px-5 py-3 flex items-center gap-1 overflow-x-auto">
+                      {steps.map((s: any, i: number) => (
+                        <div key={i} className="flex items-center shrink-0">
+                          <div className="px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100">
+                            <p className="text-[10px] font-bold text-indigo-700">Step {i+1}</p>
+                            <p className="text-[10px] text-gray-700">{s.label}</p>
+                            <p className="text-[9px] text-gray-400">{s.role}</p>
+                            {s.condition && <p className="text-[8px] text-amber-600 mt-0.5">if {s.condition}</p>}
+                          </div>
+                          {i < steps.length - 1 && <svg className="w-4 h-4 text-gray-300 mx-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {/* Recent Approval Requests */}
+            {(workflowData?.requests || []).length > 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <h3 className="text-sm font-bold text-gray-900">Recent Approval Requests</h3>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 sticky top-0"><tr>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-500">Ref</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-500">Workflow</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-500">Entity</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-500">Step</th>
+                      <th className="text-left px-4 py-2 font-semibold text-gray-500">Status</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(workflowData?.requests || []).map((r: any) => (
+                        <tr key={r.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2 font-mono text-gray-400">{r.ref}</td>
+                          <td className="px-4 py-2 text-gray-700">{r.workflow_name}</td>
+                          <td className="px-4 py-2 text-gray-600">{r.entity_type?.replace("_", " ")} ({r.entity_ref})</td>
+                          <td className="px-4 py-2">{r.current_step + 1}</td>
+                          <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${r.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : r.status === "rejected" ? "bg-red-50 text-red-600 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{r.status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {tab === "Templates" && (

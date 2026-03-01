@@ -143,6 +143,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+
+    if (section === "recruitment") {
+      const jobs = await sql`SELECT jp.*, (SELECT COUNT(*) FROM applications WHERE job_id = jp.id) as app_count FROM job_postings jp ORDER BY created_at DESC`;
+      const apps = await sql`SELECT a.*, j.title as job_title, j.department as job_department FROM applications a LEFT JOIN job_postings j ON a.job_id = j.id ORDER BY a.created_at DESC`;
+      const stats = await sql`SELECT COUNT(*) as total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_count FROM job_postings`;
+      return NextResponse.json({ jobs, applications: apps, stats: stats[0] });
+    }
+
+    if (section === "geofences") {
+      const fences = await sql`SELECT * FROM geofences ORDER BY name`;
+      return NextResponse.json({ geofences: fences });
+    }
+
+    if (section === "workflows") {
+      const workflows = await sql`SELECT * FROM approval_workflows ORDER BY name`;
+      const requests = await sql`SELECT ar.*, aw.name as workflow_name, aw.description as workflow_desc FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id ORDER BY ar.created_at DESC LIMIT 50`;
+      return NextResponse.json({ workflows, requests });
+    }
+
     return NextResponse.json([]);
   } catch (e: any) {
     console.error("Admin API error:", e.message);
@@ -229,7 +248,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+
+    if (action === "create_job") {
+      const { title, department, description, requirements, salary_range, location, employment_type } = body;
+      await sql`INSERT INTO job_postings (ref, title, department, description, requirements, salary_range, location, employment_type, status)
+        VALUES ('JOB-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('job_postings_id_seq')::text, 3, '0'), ${title}, ${department}, ${description || ''}, ${requirements || ''}, ${salary_range || ''}, ${location || 'Riyadh'}, ${employment_type || 'full_time'}, 'open')`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update_job_status") {
+      const { job_id, status } = body;
+      await sql`UPDATE job_postings SET status = ${status}, updated_at = NOW() WHERE id = ${job_id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "advance_application") {
+      const { app_id, stage, status: appStatus } = body;
+      await sql`UPDATE applications SET stage = ${stage}, status = ${appStatus || stage}, updated_at = NOW() WHERE id = ${app_id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_geofence") {
+      const { name, latitude, longitude, radius_meters, address, description } = body;
+      await sql`INSERT INTO geofences (name, description, latitude, longitude, radius_meters, address) VALUES (${name}, ${description || ''}, ${latitude}, ${longitude}, ${radius_meters || 200}, ${address || ''})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "update_geofence") {
+      const { id, name, latitude, longitude, radius_meters, address, is_active } = body;
+      await sql`UPDATE geofences SET name = COALESCE(${name || null}, name), latitude = COALESCE(${latitude || null}, latitude), longitude = COALESCE(${longitude || null}, longitude), radius_meters = COALESCE(${radius_meters || null}, radius_meters), address = COALESCE(${address || null}, address), is_active = COALESCE(${is_active !== undefined ? is_active : null}, is_active) WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_geofence") {
+      const { id } = body;
+      await sql`DELETE FROM geofences WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
