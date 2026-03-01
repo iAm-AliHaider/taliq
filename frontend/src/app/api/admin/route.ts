@@ -281,6 +281,61 @@ export async function POST(request: NextRequest) {
     }
 
 
+
+    if (action === "create_asset") {
+      const { name, asset_type, serial_number, assigned_to, condition } = body;
+      const ref = `AST-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+      await sql`INSERT INTO assets (ref, name, asset_type, serial_number, assigned_to, condition, status, assigned_date)
+        VALUES (${ref}, ${name}, ${asset_type}, ${serial_number || ''}, ${assigned_to || null}, ${condition || 'good'}, ${assigned_to ? 'assigned' : 'available'}, ${assigned_to ? new Date().toISOString().slice(0,10) : null})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "return_asset") {
+      const { ref } = body;
+      await sql`UPDATE assets SET status = 'available', assigned_to = NULL, assigned_date = NULL WHERE ref = ${ref}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_shift") {
+      const { name, start_time, end_time, break_minutes, is_night_shift, differential_pct } = body;
+      await sql`INSERT INTO shifts (name, start_time, end_time, break_minutes, is_night_shift, differential_pct)
+        VALUES (${name}, ${start_time}, ${end_time}, ${break_minutes || 60}, ${is_night_shift || false}, ${differential_pct || 0})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "assign_shift") {
+      const { employee_id, shift_id, effective_from } = body;
+      await sql`INSERT INTO employee_shifts (employee_id, shift_id, effective_from) VALUES (${employee_id}, ${shift_id}, ${effective_from || new Date().toISOString().slice(0,10)})
+        ON CONFLICT (employee_id) DO UPDATE SET shift_id = ${shift_id}, effective_from = ${effective_from || new Date().toISOString().slice(0,10)}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_contract") {
+      const { employee_id, contract_type, start_date, end_date, salary, probation_end } = body;
+      await sql`INSERT INTO contracts (employee_id, contract_type, start_date, end_date, salary, probation_end, status)
+        VALUES (${employee_id}, ${contract_type || 'unlimited'}, ${start_date}, ${end_date || null}, ${salary || 0}, ${probation_end || null}, 'active')`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "renew_contract") {
+      const { id, new_end_date, new_salary } = body;
+      await sql`UPDATE contracts SET end_date = ${new_end_date}, salary = COALESCE(${new_salary}::numeric, salary), status = 'active' WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "approve_exit") {
+      const { ref, decision } = body;
+      const status = decision === 'approved' ? 'approved' : 'rejected';
+      await sql`UPDATE exit_requests SET status = ${status} WHERE ref = ${ref}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "renew_iqama") {
+      const { id, new_expiry, new_number } = body;
+      await sql`UPDATE iqama_visa SET expiry_date = ${new_expiry}, document_number = COALESCE(${new_number}, document_number), status = 'active' WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "create_workflow") {
       const { name, entity_type, description, steps } = body;
       await sql`INSERT INTO approval_workflows (name, entity_type, description, steps)

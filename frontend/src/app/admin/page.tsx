@@ -179,6 +179,10 @@ export default function AdminPage() {
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateFence, setShowCreateFence] = useState(false);
   const [showWorkflowBuilder, setShowWorkflowBuilder] = useState(false);
+  const [showCreateAsset, setShowCreateAsset] = useState(false);
+  const [showCreateShift, setShowCreateShift] = useState(false);
+  const [showCreateContract, setShowCreateContract] = useState(false);
+  const [renewingIqama, setRenewingIqama] = useState<string|null>(null);
   const [newJob, setNewJob] = useState({ title: "", department: "", description: "", requirements: "", salary_range: "", location: "Riyadh", employment_type: "full_time" });
   const [newFence, setNewFence] = useState({ name: "", latitude: "", longitude: "", radius_meters: "200", address: "", description: "" });
   // Create employee
@@ -599,8 +603,16 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <SeverityBadge severity={g.severity} />
                       <StatusBadge status={g.status} />
+                      {g.status !== "resolved" && g.status !== "closed" && (
+                        <div className="flex gap-1">
+                          {g.status === "submitted" && <button onClick={() => handleGrievanceAction(g.ref, "investigating", undefined, "HR")} className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] text-amber-600 hover:bg-amber-100">Investigate</button>}
+                          <button onClick={() => { const r = prompt("Resolution notes:"); if (r) handleGrievanceAction(g.ref, "resolved", r); }} className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 hover:bg-emerald-100">Resolve</button>
+                          <button onClick={() => handleGrievanceAction(g.ref, "closed")} className="px-2 py-0.5 rounded bg-gray-50 border border-gray-200 text-[10px] text-gray-500 hover:bg-gray-100">Close</button>
+                        </div>
+                      )}
                     </div>
                   </div>
+                  {g.resolution && <p className="text-[10px] text-emerald-600 mt-1 ml-0">Resolution: {g.resolution}</p>}
                 </div>
               ))}
               {grievances.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No grievances</div>}
@@ -611,6 +623,22 @@ export default function AdminPage() {
         {/* ANNOUNCEMENTS */}
         {tab === "Announcements" && (
           <div className="space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-gray-800">Company Announcements</h2>
+              <button onClick={() => setShowAnnForm(!showAnnForm)} className="px-4 py-2 rounded-xl bg-purple-500 text-white text-xs font-semibold hover:bg-purple-600 shadow-sm shadow-purple-200">{showAnnForm ? "Cancel" : "+ New Announcement"}</button>
+            </div>
+            {showAnnForm && (
+              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                <input value={annTitle} onChange={e => setAnnTitle(e.target.value)} placeholder="Announcement Title *" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-purple-200" />
+                <textarea value={annContent} onChange={e => setAnnContent(e.target.value)} placeholder="Content *" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-20 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200" />
+                <div className="flex gap-2 items-center">
+                  <select value={annPriority} onChange={e => setAnnPriority(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-200 text-xs">
+                    <option value="normal">Normal</option><option value="important">Important</option><option value="urgent">Urgent</option>
+                  </select>
+                  <button onClick={handleCreateAnnouncement} disabled={annSaving} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 disabled:opacity-50">{annSaving ? "Posting..." : "Post"}</button>
+                </div>
+              </div>
+            )}
             {announcements.map(a => (
               <div key={a.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
                 <div className="flex items-start justify-between">
@@ -619,7 +647,10 @@ export default function AdminPage() {
                     <p className="text-xs text-gray-500 mt-1">{a.content}</p>
                     <p className="text-[10px] text-gray-400 mt-1">By {a.author} - {a.date}</p>
                   </div>
-                  <StatusBadge status={a.priority} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={a.priority} />
+                    <button onClick={() => handleDeleteAnnouncement(a.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -659,10 +690,13 @@ export default function AdminPage() {
                     <p className="text-[10px] text-gray-400">{l.ref} - {l.letter_type?.replace(/_/g, " ")} - {l.department}</p>
                     {l.purpose && <p className="text-[10px] text-gray-400 italic">Purpose: {l.purpose}</p>}
                   </div>
-                  <StatusBadge status={l.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={l.status} />
+                    {l.status === "pending" && <button onClick={() => handleApprove("document", l.ref, "ready")} className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 hover:bg-emerald-100">Mark Ready</button>}
+                  </div>
                 </div>
               ))}
-              {letters.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No letters generated</div>}
+              {letters.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No letters generated yet. Employees can request letters via voice.</div>}
             </div>
           </div>
         )}
@@ -670,9 +704,38 @@ export default function AdminPage() {
         {/* CONTRACTS */}
         {tab === "Contracts" && (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-800">Employee Contracts</h3>
+              <button onClick={() => setShowCreateContract(!showCreateContract)} className="px-3 py-1.5 rounded-xl bg-blue-500 text-white text-[10px] font-semibold hover:bg-blue-600">{showCreateContract ? "Cancel" : "+ New Contract"}</button>
             </div>
+            {showCreateContract && (
+              <div className="mx-5 my-3 p-4 bg-blue-50 rounded-xl border border-blue-200 space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  <select id="ct_emp" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs">
+                    <option value="">Select Employee *</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                  <select id="ct_type" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs">
+                    <option value="unlimited">Unlimited</option><option value="fixed">Fixed Term</option><option value="probation">Probation</option>
+                  </select>
+                  <input id="ct_start" type="date" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                  <input id="ct_end" type="date" placeholder="End date (optional)" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                  <input id="ct_salary" type="number" placeholder="Salary (SAR)" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                </div>
+                <button onClick={async () => {
+                  const emp = (document.getElementById('ct_emp') as HTMLSelectElement).value;
+                  if (!emp) return;
+                  await fetch("/api/admin?action=create_contract", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({
+                    employee_id: emp,
+                    contract_type: (document.getElementById('ct_type') as HTMLSelectElement).value,
+                    start_date: (document.getElementById('ct_start') as HTMLInputElement).value || new Date().toISOString().slice(0,10),
+                    end_date: (document.getElementById('ct_end') as HTMLInputElement).value || null,
+                    salary: parseFloat((document.getElementById('ct_salary') as HTMLInputElement).value) || 0,
+                  })});
+                  setShowCreateContract(false); loadData();
+                }} className="px-4 py-1.5 rounded-xl bg-emerald-500 text-white text-xs font-semibold">Create Contract</button>
+              </div>
+            )}
             <table className="w-full"><thead><tr className="bg-gray-50 border-b">
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Employee</th>
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
@@ -680,6 +743,7 @@ export default function AdminPage() {
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">End</th>
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Salary</th>
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Status</th>
+              <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Actions</th>
             </tr></thead><tbody className="divide-y divide-gray-50">
               {contracts.map((c: any, i: number) => (
                 <tr key={i} className="hover:bg-gray-50/50">
@@ -689,6 +753,9 @@ export default function AdminPage() {
                   <td className="px-4 py-2 text-xs text-gray-600">{c.end_date || "Unlimited"}</td>
                   <td className="px-4 py-2 text-xs font-medium text-gray-900">{c.salary?.toLocaleString()} SAR</td>
                   <td className="px-4 py-2"><StatusBadge status={c.status} /></td>
+                  <td className="px-4 py-2">
+                    {c.contract_type === "fixed" && c.status === "active" && <button onClick={() => { const dt = prompt("New end date (YYYY-MM-DD):"); if (dt) fetch("/api/admin?action=renew_contract", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: c.id, new_end_date: dt }) }).then(() => loadData()); }} className="text-[10px] text-blue-600 hover:underline">Renew</button>}
+                  </td>
                 </tr>
               ))}
             </tbody></table>
@@ -700,11 +767,38 @@ export default function AdminPage() {
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-800">Asset Inventory</h3>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Badge text={`${assets.filter((a:any) => a.status === "assigned").length} assigned`} color="blue" />
                 <Badge text={`${assets.filter((a:any) => a.status === "available").length} available`} color="emerald" />
+                <button onClick={() => setShowCreateAsset(!showCreateAsset)} className="px-3 py-1.5 rounded-xl bg-emerald-500 text-white text-[10px] font-semibold hover:bg-emerald-600">{showCreateAsset ? "Cancel" : "+ Add Asset"}</button>
               </div>
             </div>
+            {showCreateAsset && (
+              <div className="mx-5 mb-3 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <input id="ast_name" placeholder="Asset Name *" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                  <select id="ast_type" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs">
+                    <option value="laptop">Laptop</option><option value="phone">Phone</option><option value="monitor">Monitor</option><option value="desk">Desk</option><option value="chair">Chair</option><option value="vehicle">Vehicle</option><option value="other">Other</option>
+                  </select>
+                  <input id="ast_serial" placeholder="Serial Number" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                  <select id="ast_assign" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs">
+                    <option value="">Unassigned</option>
+                    {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={async () => {
+                  const n = (document.getElementById('ast_name') as HTMLInputElement).value;
+                  if (!n) return;
+                  await fetch("/api/admin?action=create_asset", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({
+                    name: n,
+                    asset_type: (document.getElementById('ast_type') as HTMLSelectElement).value,
+                    serial_number: (document.getElementById('ast_serial') as HTMLInputElement).value,
+                    assigned_to: (document.getElementById('ast_assign') as HTMLSelectElement).value || null,
+                  })});
+                  setShowCreateAsset(false); loadData();
+                }} className="px-4 py-1.5 rounded-xl bg-emerald-500 text-white text-xs font-semibold">Add Asset</button>
+              </div>
+            )}
             <table className="w-full"><thead><tr className="bg-gray-50 border-b">
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Asset</th>
               <th className="text-left px-4 py-2 text-[10px] text-gray-400 uppercase font-semibold">Type</th>
@@ -718,7 +812,10 @@ export default function AdminPage() {
                   <td className="px-4 py-2 text-xs text-gray-600 capitalize">{a.asset_type?.replace("_"," ")}</td>
                   <td className="px-4 py-2 text-xs text-gray-600">{a.assigned_name || "Unassigned"}</td>
                   <td className="px-4 py-2"><Badge text={a.condition || "good"} color={a.condition === "good" ? "emerald" : "amber"} /></td>
-                  <td className="px-4 py-2"><StatusBadge status={a.status} /></td>
+                  <td className="px-4 py-2 flex items-center gap-1">
+                    <StatusBadge status={a.status} />
+                    {a.status === "assigned" && <button onClick={async () => { await fetch("/api/admin?action=return_asset", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ref: a.ref }) }); loadData(); }} className="text-[10px] text-amber-600 hover:underline">Return</button>}
+                  </td>
                 </tr>
               ))}
             </tbody></table>
@@ -729,7 +826,33 @@ export default function AdminPage() {
         {tab === "Shifts" && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-800 mb-3">Shift Definitions</h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-800">Shift Definitions</h3>
+                <button onClick={() => setShowCreateShift(!showCreateShift)} className="px-3 py-1.5 rounded-xl bg-indigo-500 text-white text-[10px] font-semibold hover:bg-indigo-600">{showCreateShift ? "Cancel" : "+ New Shift"}</button>
+              </div>
+              {showCreateShift && (
+                <div className="mb-3 p-4 bg-indigo-50 rounded-xl border border-indigo-200 space-y-2">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    <input id="sh_name" placeholder="Shift Name *" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                    <input id="sh_start" placeholder="Start (08:00)" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                    <input id="sh_end" placeholder="End (17:00)" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                    <input id="sh_break" placeholder="Break min" type="number" defaultValue="60" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                    <input id="sh_diff" placeholder="Differential %" type="number" defaultValue="0" className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs" />
+                  </div>
+                  <button onClick={async () => {
+                    const n = (document.getElementById('sh_name') as HTMLInputElement).value;
+                    if (!n) return;
+                    await fetch("/api/admin?action=create_shift", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({
+                      name: n,
+                      start_time: (document.getElementById('sh_start') as HTMLInputElement).value || '08:00',
+                      end_time: (document.getElementById('sh_end') as HTMLInputElement).value || '17:00',
+                      break_minutes: parseInt((document.getElementById('sh_break') as HTMLInputElement).value) || 60,
+                      differential_pct: parseInt((document.getElementById('sh_diff') as HTMLInputElement).value) || 0,
+                    })});
+                    setShowCreateShift(false); loadData();
+                  }} className="px-4 py-1.5 rounded-xl bg-emerald-500 text-white text-xs font-semibold">Create Shift</button>
+                </div>
+              )}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {(shifts.shifts || []).map((s: any) => (
                   <div key={s.id} className={`rounded-xl p-3 border ${s.is_night_shift ? "bg-indigo-50 border-indigo-200" : "bg-gray-50 border-gray-200"}`}>
@@ -775,7 +898,10 @@ export default function AdminPage() {
                     <td className="px-4 py-2 text-xs text-gray-600 capitalize">{d.document_type?.replace("_"," ")}</td>
                     <td className="px-4 py-2 text-xs text-gray-600">{d.document_number}</td>
                     <td className="px-4 py-2"><span className={`text-xs font-medium ${days <= 30 ? "text-red-600" : days <= 90 ? "text-amber-600" : "text-gray-600"}`}>{d.expiry_date} {days <= 90 ? `(${days}d)` : ""}</span></td>
-                    <td className="px-4 py-2"><StatusBadge status={d.status} /></td>
+                    <td className="px-4 py-2 flex items-center gap-1">
+                      <StatusBadge status={d.status} />
+                      {days <= 90 && <button onClick={() => { const dt = prompt("New expiry date (YYYY-MM-DD):"); if (dt) fetch("/api/admin?action=renew_iqama", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: d.id, new_expiry: dt }) }).then(() => loadData()); }} className="text-[10px] text-blue-600 hover:underline">Renew</button>}
+                    </td>
                   </tr>
                 );
               })}
@@ -802,7 +928,15 @@ export default function AdminPage() {
                         <p className="text-sm font-medium text-gray-900">{ex.employee_name} <span className="text-gray-400 text-xs">({ex.department})</span></p>
                         <p className="text-[10px] text-gray-400">{ex.ref} - {ex.exit_type} - Last day: {ex.last_working_day}</p>
                       </div>
-                      <StatusBadge status={ex.status} />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={ex.status} />
+                        {(ex.status === "pending" || ex.status === "initiated") && (
+                          <div className="flex gap-1">
+                            <button onClick={async () => { await fetch("/api/admin?action=approve_exit", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ref: ex.ref, decision: "approved" }) }); loadData(); }} className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 hover:bg-emerald-100">Approve</button>
+                            <button onClick={async () => { await fetch("/api/admin?action=approve_exit", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ ref: ex.ref, decision: "rejected" }) }); loadData(); }} className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] text-red-600 hover:bg-red-100">Reject</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-4 mb-2">
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
