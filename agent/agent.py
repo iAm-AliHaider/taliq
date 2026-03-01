@@ -101,6 +101,13 @@ from tools import (
     bulk_approve_pending_leaves,
     bulk_approve_pending_expenses,
     send_pending_notifications,
+    # Recruitment Pipeline
+    list_job_postings, view_job_details, create_job_posting, list_applications,
+    advance_candidate, show_recruitment_stats, close_job_posting,
+    # Geofencing / GPS Attendance
+    clock_in_gps, clock_out_gps, list_office_locations, manage_geofence,
+    # Multi-Level Approval Workflows
+    view_pending_approvals, approve_request, reject_request, view_approval_chain, show_approval_workflows,
 )
 
 load_dotenv()
@@ -321,6 +328,12 @@ ALL_TOOLS = [
     initiate_exit_request, show_exit_status, show_all_exits,
     # Admin operations
     view_audit_log, bulk_approve_pending_leaves, bulk_approve_pending_expenses, send_pending_notifications,
+    # Recruitment Pipeline
+    list_job_postings, view_job_details, create_job_posting, list_applications, advance_candidate, show_recruitment_stats, close_job_posting,
+    # Geofencing / GPS Attendance
+    clock_in_gps, clock_out_gps, list_office_locations, manage_geofence,
+    # Multi-Level Approval Workflows
+    view_pending_approvals, approve_request, reject_request, view_approval_chain, show_approval_workflows,
 ]
 
 MANAGER_ONLY_TOOLS = {
@@ -339,6 +352,12 @@ MANAGER_ONLY_TOOLS = {
     "show_hr_report", "show_payroll_summary",
     "show_expiring_documents", "show_all_exits",
     "view_audit_log", "bulk_approve_pending_leaves", "bulk_approve_pending_expenses", "send_pending_notifications",
+    # Recruitment (manager)
+    "create_job_posting", "advance_candidate", "close_job_posting", "show_recruitment_stats",
+    # Geofencing management
+    "manage_geofence",
+    # Approval workflows (manager)
+    "view_pending_approvals", "approve_request", "reject_request", "show_approval_workflows",
 }
 
 

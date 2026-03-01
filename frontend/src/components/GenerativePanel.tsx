@@ -69,6 +69,17 @@ import { ExpiringDocsCard } from "./taliq/ExpiringDocsCard";
 import { ExitCard } from "./taliq/ExitCard";
 import { ExitListCard } from "./taliq/ExitListCard";
 
+import { JobListCard } from "./taliq/JobListCard";
+import { JobDetailCard } from "./taliq/JobDetailCard";
+import { ApplicationListCard } from "./taliq/ApplicationListCard";
+import { RecruitmentDashboardCard } from "./taliq/RecruitmentDashboardCard";
+import { GeofenceAlertCard } from "./taliq/GeofenceAlertCard";
+import { AttendanceConfirmCard } from "./taliq/AttendanceConfirmCard";
+import { GeofenceListCard } from "./taliq/GeofenceListCard";
+import { ApprovalChainCard } from "./taliq/ApprovalChainCard";
+import { PendingApprovalsCard } from "./taliq/PendingApprovalsCard";
+import { WorkflowListCard } from "./taliq/WorkflowListCard";
+
 const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   LeaveBalanceCard,
   LeaveRequestForm,
@@ -131,6 +142,19 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   ExpiringDocsCard,
   ExitCard,
   ExitListCard,
+  // Recruitment
+  JobListCard,
+  JobDetailCard,
+  ApplicationListCard,
+  RecruitmentDashboardCard,
+  // Geofencing
+  GeofenceAlertCard,
+  AttendanceConfirmCard,
+  GeofenceListCard,
+  // Approval Workflows
+  ApprovalChainCard,
+  PendingApprovalsCard,
+  WorkflowListCard,
 };
 
 interface Props {

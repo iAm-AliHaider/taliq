@@ -455,6 +455,89 @@ def init_db():
         updated_by TEXT DEFAULT 'system'
     )""")
 
+
+    # --- Recruitment Pipeline ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS job_postings (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        department TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        requirements TEXT DEFAULT '',
+        salary_range TEXT DEFAULT '',
+        location TEXT DEFAULT 'Riyadh',
+        employment_type TEXT DEFAULT 'full_time',
+        status TEXT DEFAULT 'open',
+        posted_by TEXT REFERENCES employees(id),
+        deadline DATE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS applications (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        job_id INTEGER REFERENCES job_postings(id),
+        candidate_name TEXT NOT NULL,
+        candidate_email TEXT DEFAULT '',
+        candidate_phone TEXT DEFAULT '',
+        resume_url TEXT DEFAULT '',
+        cover_letter TEXT DEFAULT '',
+        status TEXT DEFAULT 'applied',
+        stage TEXT DEFAULT 'screening',
+        score REAL DEFAULT 0,
+        notes JSONB DEFAULT '{}',
+        reviewed_by TEXT REFERENCES employees(id),
+        interview_id INTEGER REFERENCES interviews(id),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Geofencing / GPS Attendance ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS geofences (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        latitude DOUBLE PRECISION NOT NULL,
+        longitude DOUBLE PRECISION NOT NULL,
+        radius_meters INTEGER DEFAULT 200,
+        address TEXT DEFAULT '',
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    # --- Multi-Level Approval Workflows ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS approval_workflows (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        entity_type TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        steps JSONB NOT NULL DEFAULT '[]',
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS approval_requests (
+        id SERIAL PRIMARY KEY,
+        ref TEXT UNIQUE NOT NULL,
+        workflow_id INTEGER REFERENCES approval_workflows(id),
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        entity_ref TEXT DEFAULT '',
+        requester_id TEXT REFERENCES employees(id),
+        current_step INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        steps_log JSONB DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+    )""")
+
+
     # --- Audit Log ---
     c.execute("""
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -3057,6 +3140,82 @@ def mark_notifications_delivered(notification_ids, channel="whatsapp"):
         c.execute("UPDATE notifications SET is_read = TRUE WHERE id = %s", (nid,))
         log_audit("SYSTEM", "notification_delivered", "notification", str(nid), {"channel": channel})
     conn.commit()
+
+    # --- Seed Geofences ---
+    _geofences = [
+        ("MRNA HQ - Riyadh", "Main office headquarters", 24.7136, 46.6753, 300, "King Fahd Road, Riyadh"),
+        ("MRNA Branch - Jeddah", "Jeddah branch office", 21.5433, 39.1728, 200, "Tahlia Street, Jeddah"),
+        ("MRNA Branch - Dammam", "Eastern Province office", 26.3927, 50.1146, 200, "Prince Mohammed Bin Fahd Rd, Dammam"),
+    ]
+    for _g_name, _g_desc, _g_lat, _g_lng, _g_rad, _g_addr in _geofences:
+        c.execute("""INSERT INTO geofences (name, description, latitude, longitude, radius_meters, address)
+            VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (_g_name, _g_desc, _g_lat, _g_lng, _g_rad, _g_addr))
+
+    # --- Seed Approval Workflows ---
+    _workflows = [
+        ("leave_approval", "leave_request", "Leave Request Approval",
+         json.dumps([
+             {"step": 1, "role": "direct_manager", "label": "Direct Manager", "action": "approve"},
+             {"step": 2, "role": "hr_manager", "label": "HR Manager", "action": "approve"},
+         ])),
+        ("expense_approval", "expense", "Expense Approval",
+         json.dumps([
+             {"step": 1, "role": "direct_manager", "label": "Direct Manager", "action": "approve"},
+             {"step": 2, "role": "finance", "label": "Finance Department", "action": "approve", "condition": "amount > 5000"},
+             {"step": 3, "role": "hr_manager", "label": "HR Final Approval", "action": "approve", "condition": "amount > 10000"},
+         ])),
+        ("loan_approval", "loan", "Loan Request Approval",
+         json.dumps([
+             {"step": 1, "role": "direct_manager", "label": "Direct Manager", "action": "approve"},
+             {"step": 2, "role": "hr_manager", "label": "HR Manager", "action": "approve"},
+             {"step": 3, "role": "cfo", "label": "CFO / Finance Head", "action": "approve"},
+         ])),
+        ("exit_approval", "exit_request", "Exit/Offboarding Approval",
+         json.dumps([
+             {"step": 1, "role": "direct_manager", "label": "Direct Manager", "action": "approve"},
+             {"step": 2, "role": "hr_manager", "label": "HR Manager", "action": "approve"},
+             {"step": 3, "role": "it_admin", "label": "IT (Asset Recovery)", "action": "clearance"},
+             {"step": 4, "role": "finance", "label": "Finance (Final Settlement)", "action": "clearance"},
+         ])),
+    ]
+    for _w_name, _w_type, _w_desc, _w_steps in _workflows:
+        c.execute("""INSERT INTO approval_workflows (name, entity_type, description, steps)
+            VALUES (%s,%s,%s,%s::jsonb) ON CONFLICT (name) DO NOTHING""",
+            (_w_name, _w_type, _w_desc, _w_steps))
+
+    # --- Seed Job Postings ---
+    _jobs = [
+        ("JOB-2026-001", "Senior Software Engineer", "Information Technology",
+         "Lead development of enterprise applications and mentor junior developers.",
+         "5+ years Python/TypeScript, cloud architecture, team leadership",
+         "15,000 - 25,000 SAR", "Riyadh", "full_time", "open", "E003"),
+        ("JOB-2026-002", "HR Business Partner", "Human Resources",
+         "Partner with business units to drive HR strategy and employee engagement.",
+         "3+ years HR experience, SHRM certification preferred",
+         "12,000 - 18,000 SAR", "Riyadh", "full_time", "open", "E002"),
+        ("JOB-2026-003", "Data Analyst (Contract)", "Finance",
+         "Analyze financial data and create dashboards for executive reporting.",
+         "SQL, Power BI/Tableau, financial modeling",
+         "10,000 - 15,000 SAR", "Jeddah", "contract", "open", "E005"),
+    ]
+    for _j in _jobs:
+        c.execute("""INSERT INTO job_postings (ref, title, department, description, requirements, salary_range, location, employment_type, status, posted_by)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (ref) DO NOTHING""", _j)
+
+    # --- Seed Applications ---
+    _apps = [
+        ("APP-2026-001", 1, "Omar Al-Zahrani", "omar.z@email.com", "+966501234567", "screening", "applied", 0),
+        ("APP-2026-002", 1, "Sara Al-Ghamdi", "sara.g@email.com", "+966509876543", "interview", "shortlisted", 78),
+        ("APP-2026-003", 2, "Noura Al-Qahtani", "noura.q@email.com", "+966507654321", "screening", "applied", 0),
+        ("APP-2026-004", 1, "Faisal Al-Harbi", "faisal.h@email.com", "+966504567890", "offer", "offered", 92),
+    ]
+    for _a in _apps:
+        c.execute("""INSERT INTO applications (ref, job_id, candidate_name, candidate_email, candidate_phone, stage, status, score)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (ref) DO NOTHING""", _a)
+
+    conn.commit()
+
     conn.close()
     return {"marked": len(notification_ids)}
 
@@ -3127,4 +3286,519 @@ def create_letter_template(template_type, name, body_html, variables=None, heade
     conn.close()
     log_audit("admin", "create_letter_template", "template", template_type, {"name": name})
     return {"id": row_id, "type": template_type}
+
+
+# ============================================================
+# RECRUITMENT PIPELINE
+# ============================================================
+
+def get_job_postings(status=None):
+    conn = get_db()
+    c = conn.cursor()
+    if status:
+        c.execute("SELECT * FROM job_postings WHERE status=%s ORDER BY created_at DESC", (status,))
+    else:
+        c.execute("SELECT * FROM job_postings ORDER BY created_at DESC")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_job_posting(job_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM job_postings WHERE id=%s", (job_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def get_job_posting_by_ref(ref):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM job_postings WHERE ref=%s", (ref,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def create_job_posting(title, department, description="", requirements="", salary_range="", location="Riyadh", employment_type="full_time", posted_by=None, deadline=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO job_postings (ref, title, department, description, requirements, salary_range, location, employment_type, posted_by, deadline) VALUES ('TMP-' || gen_random_uuid()::text, %s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        (title, department, description, requirements, salary_range, location, employment_type, posted_by, deadline))
+    row_id = c.fetchone()[0]
+    ref = f"JOB-{date.today().year}-{row_id:03d}"
+    c.execute("UPDATE job_postings SET ref=%s WHERE id=%s", (ref, row_id))
+    conn.commit()
+    conn.close()
+    return {"id": row_id, "ref": ref}
+
+
+def update_job_posting(job_id, updates):
+    conn = get_db()
+    c = conn.cursor()
+    sets = []
+    params = []
+    for key in ["title", "department", "description", "requirements", "salary_range", "location", "employment_type", "status", "deadline"]:
+        if key in updates:
+            sets.append(f"{key} = %s")
+            params.append(updates[key])
+    if sets:
+        sets.append("updated_at = NOW()")
+        params.append(job_id)
+        c.execute(f"UPDATE job_postings SET {', '.join(sets)} WHERE id = %s", tuple(params))
+        conn.commit()
+    conn.close()
+
+
+def get_applications(job_id=None, stage=None, status=None):
+    conn = get_db()
+    c = conn.cursor()
+    conditions = []
+    params = []
+    if job_id:
+        conditions.append("a.job_id = %s")
+        params.append(job_id)
+    if stage:
+        conditions.append("a.stage = %s")
+        params.append(stage)
+    if status:
+        conditions.append("a.status = %s")
+        params.append(status)
+    where = " AND ".join(conditions) if conditions else "1=1"
+    c.execute(f"""SELECT a.*, j.title as job_title, j.department as job_department
+        FROM applications a LEFT JOIN job_postings j ON a.job_id = j.id
+        WHERE {where} ORDER BY a.created_at DESC""", tuple(params))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_application(app_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT a.*, j.title as job_title, j.department as job_department
+        FROM applications a LEFT JOIN job_postings j ON a.job_id = j.id WHERE a.id=%s""", (app_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def create_application(job_id, candidate_name, candidate_email="", candidate_phone="", resume_url="", cover_letter=""):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO applications (ref, job_id, candidate_name, candidate_email, candidate_phone, resume_url, cover_letter) VALUES ('TMP-' || gen_random_uuid()::text, %s,%s,%s,%s,%s,%s) RETURNING id",
+        (job_id, candidate_name, candidate_email, candidate_phone, resume_url, cover_letter))
+    row_id = c.fetchone()[0]
+    ref = f"APP-{date.today().year}-{row_id:03d}"
+    c.execute("UPDATE applications SET ref=%s WHERE id=%s", (ref, row_id))
+    conn.commit()
+    conn.close()
+    return {"id": row_id, "ref": ref}
+
+
+def update_application(app_id, updates):
+    conn = get_db()
+    c = conn.cursor()
+    sets = []
+    params = []
+    for key in ["status", "stage", "score", "reviewed_by", "interview_id"]:
+        if key in updates:
+            sets.append(f"{key} = %s")
+            params.append(updates[key])
+    if "notes" in updates:
+        sets.append("notes = %s::jsonb")
+        params.append(json.dumps(updates["notes"]))
+    if sets:
+        sets.append("updated_at = NOW()")
+        params.append(app_id)
+        c.execute(f"UPDATE applications SET {', '.join(sets)} WHERE id = %s", tuple(params))
+        conn.commit()
+    conn.close()
+
+
+def get_recruitment_stats():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT
+        COUNT(*) as total_jobs,
+        SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_jobs,
+        SUM(CASE WHEN status='closed' THEN 1 ELSE 0 END) as closed_jobs
+        FROM job_postings""")
+    jobs = _fetchone(c)
+    c.execute("""SELECT
+        COUNT(*) as total_apps,
+        SUM(CASE WHEN stage='screening' THEN 1 ELSE 0 END) as screening,
+        SUM(CASE WHEN stage='interview' THEN 1 ELSE 0 END) as interviewing,
+        SUM(CASE WHEN stage='offer' THEN 1 ELSE 0 END) as offer,
+        SUM(CASE WHEN stage='hired' THEN 1 ELSE 0 END) as hired,
+        SUM(CASE WHEN stage='rejected' THEN 1 ELSE 0 END) as rejected
+        FROM applications""")
+    apps = _fetchone(c)
+    conn.close()
+    return {"jobs": jobs, "applications": apps}
+
+
+# ============================================================
+# GEOFENCING / GPS ATTENDANCE
+# ============================================================
+
+def get_geofences():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM geofences WHERE is_active = TRUE ORDER BY name")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_geofence(fence_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM geofences WHERE id=%s", (fence_id,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def create_geofence(name, latitude, longitude, radius_meters=200, description="", address=""):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO geofences (name, latitude, longitude, radius_meters, description, address) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+        (name, latitude, longitude, radius_meters, description, address))
+    row_id = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"id": row_id, "name": name}
+
+
+def update_geofence(fence_id, updates):
+    conn = get_db()
+    c = conn.cursor()
+    sets = []
+    params = []
+    for key in ["name", "latitude", "longitude", "radius_meters", "description", "address", "is_active"]:
+        if key in updates:
+            sets.append(f"{key} = %s")
+            params.append(updates[key])
+    if sets:
+        params.append(fence_id)
+        c.execute(f"UPDATE geofences SET {', '.join(sets)} WHERE id = %s", tuple(params))
+        conn.commit()
+    conn.close()
+
+
+def validate_location(latitude, longitude):
+    """Check if given lat/lng is within any active geofence. Returns (bool, geofence_name or None, distance_meters)."""
+    import math
+    fences = get_geofences()
+    for fence in fences:
+        # Haversine formula
+        R = 6371000  # Earth radius in meters
+        lat1 = math.radians(latitude)
+        lat2 = math.radians(fence["latitude"])
+        dlat = math.radians(fence["latitude"] - latitude)
+        dlng = math.radians(fence["longitude"] - longitude)
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlng/2)**2
+        c_val = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        distance = R * c_val
+        if distance <= fence["radius_meters"]:
+            return True, fence["name"], round(distance)
+    return False, None, None
+
+
+def clock_in_with_location(employee_id, latitude=None, longitude=None):
+    """Clock in with optional GPS validation."""
+    conn = get_db()
+    c = conn.cursor()
+    today = str(date.today())
+    
+    # Check existing record
+    c.execute("SELECT * FROM attendance_records WHERE employee_id=%s AND date=%s", (employee_id, today))
+    existing = _fetchone(c)
+    if existing and existing.get("clock_in"):
+        conn.close()
+        return {"error": "Already clocked in today"}
+    
+    location_data = {}
+    if latitude is not None and longitude is not None:
+        valid, fence_name, distance = validate_location(latitude, longitude)
+        location_data = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "geofence_valid": valid,
+            "geofence_name": fence_name,
+            "distance_meters": distance
+        }
+        # Check geofencing policy
+        policy = get_policy("attendance.require_geofence")
+        if policy and not valid:
+            conn.close()
+            return {"error": f"You are not within any registered office location. Please clock in from an approved location.", "location": location_data}
+    
+    now = datetime.now().strftime("%H:%M:%S")
+    if existing:
+        c.execute("UPDATE attendance_records SET clock_in=%s, status='present', location_data=%s::jsonb, updated_at=NOW() WHERE employee_id=%s AND date=%s",
+            (now, json.dumps(location_data), employee_id, today))
+    else:
+        c.execute("INSERT INTO attendance_records (employee_id, date, clock_in, status, location_data) VALUES (%s,%s,%s,'present',%s::jsonb)",
+            (employee_id, today, now, json.dumps(location_data)))
+    conn.commit()
+    conn.close()
+    log_audit(employee_id, "clock_in", "attendance", employee_id, location_data)
+    return {"success": True, "time": now, "location": location_data}
+
+
+def clock_out_with_location(employee_id, latitude=None, longitude=None):
+    """Clock out with optional GPS validation."""
+    conn = get_db()
+    c = conn.cursor()
+    today = str(date.today())
+    c.execute("SELECT * FROM attendance_records WHERE employee_id=%s AND date=%s", (employee_id, today))
+    existing = _fetchone(c)
+    if not existing or not existing.get("clock_in"):
+        conn.close()
+        return {"error": "No clock-in record for today"}
+    
+    location_data = {}
+    if latitude is not None and longitude is not None:
+        valid, fence_name, distance = validate_location(latitude, longitude)
+        location_data = {"latitude": latitude, "longitude": longitude, "geofence_valid": valid, "geofence_name": fence_name, "distance_meters": distance}
+    
+    now = datetime.now().strftime("%H:%M:%S")
+    # Calculate hours worked
+    clock_in = existing["clock_in"]
+    if isinstance(clock_in, str):
+        h, m, s = map(int, clock_in.split(":"))
+        cin = timedelta(hours=h, minutes=m, seconds=s)
+    else:
+        cin = timedelta(hours=clock_in.hour, minutes=clock_in.minute, seconds=clock_in.second)
+    h2, m2, s2 = map(int, now.split(":"))
+    cout = timedelta(hours=h2, minutes=m2, seconds=s2)
+    hours = round((cout - cin).total_seconds() / 3600, 2)
+    
+    c.execute("UPDATE attendance_records SET clock_out=%s, hours_worked=%s, location_data=%s::jsonb, updated_at=NOW() WHERE employee_id=%s AND date=%s",
+        (now, hours, json.dumps(location_data), employee_id, today))
+    conn.commit()
+    conn.close()
+    log_audit(employee_id, "clock_out", "attendance", employee_id, location_data)
+    return {"success": True, "time": now, "hours": hours, "location": location_data}
+
+
+# ============================================================
+# MULTI-LEVEL APPROVAL WORKFLOWS
+# ============================================================
+
+def get_approval_workflows():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM approval_workflows WHERE is_active = TRUE ORDER BY name")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_approval_workflow(name):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM approval_workflows WHERE name=%s AND is_active=TRUE", (name,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def create_approval_request(workflow_name, entity_type, entity_id, entity_ref, requester_id):
+    """Create a new multi-level approval request."""
+    workflow = get_approval_workflow(workflow_name)
+    if not workflow:
+        return {"error": f"Workflow '{workflow_name}' not found"}
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""INSERT INTO approval_requests (ref, workflow_id, entity_type, entity_id, entity_ref, requester_id, current_step, steps_log)
+        VALUES ('TMP-' || gen_random_uuid()::text, %s, %s, %s, %s, %s, 0, '[]'::jsonb) RETURNING id""",
+        (workflow["id"], entity_type, entity_id, entity_ref, requester_id))
+    row_id = c.fetchone()[0]
+    ref = f"APR-{date.today().year}-{row_id:03d}"
+    c.execute("UPDATE approval_requests SET ref=%s WHERE id=%s", (ref, row_id))
+    conn.commit()
+    conn.close()
+    return {"id": row_id, "ref": ref, "workflow": workflow["name"], "total_steps": len(workflow["steps"])}
+
+
+def get_approval_request(ref):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""SELECT ar.*, aw.name as workflow_name, aw.steps as workflow_steps, aw.description as workflow_description
+        FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id WHERE ar.ref=%s""", (ref,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def get_pending_approvals(approver_id):
+    """Get all pending approval requests where the current step's role matches the approver."""
+    conn = get_db()
+    c = conn.cursor()
+    # Get approver's role info
+    emp = get_employee(approver_id)
+    if not emp:
+        conn.close()
+        return []
+    
+    c.execute("""SELECT ar.*, aw.name as workflow_name, aw.steps as workflow_steps, aw.description as workflow_description
+        FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id
+        WHERE ar.status = 'pending' ORDER BY ar.created_at DESC""")
+    all_pending = _fetchall(c)
+    conn.close()
+    
+    # Filter: check if current step matches approver's role
+    result = []
+    emp_dept = (emp.get("department") or "").lower()
+    emp_pos = (emp.get("position") or "").lower()
+    is_hr = "hr" in emp_dept or "human" in emp_dept
+    is_finance = "finance" in emp_dept
+    is_it = "it" in emp_dept or "information" in emp_dept or "technology" in emp_dept
+    is_manager = emp.get("role") == "manager" or emp.get("role") == "admin"
+    
+    for req in all_pending:
+        steps = req.get("workflow_steps", [])
+        if isinstance(steps, str):
+            steps = json.loads(steps)
+        current = req.get("current_step", 0)
+        if current >= len(steps):
+            continue
+        step = steps[current]
+        role = step.get("role", "")
+        # Role matching
+        if role == "direct_manager" and is_manager:
+            result.append(req)
+        elif role == "hr_manager" and is_hr:
+            result.append(req)
+        elif role == "finance" and is_finance:
+            result.append(req)
+        elif role == "it_admin" and is_it:
+            result.append(req)
+        elif role == "cfo" and is_finance and is_manager:
+            result.append(req)
+    
+    return result
+
+
+def approve_step(approval_ref, approver_id, action="approve", comment=""):
+    """Approve or reject the current step of an approval request."""
+    conn = get_db()
+    c = conn.cursor()
+    
+    req = get_approval_request(approval_ref)
+    if not req:
+        conn.close()
+        return {"error": "Approval request not found"}
+    if req["status"] != "pending":
+        conn.close()
+        return {"error": f"Request is already {req['status']}"}
+    
+    steps = req.get("workflow_steps", [])
+    if isinstance(steps, str):
+        steps = json.loads(steps)
+    current = req.get("current_step", 0)
+    steps_log = req.get("steps_log", [])
+    if isinstance(steps_log, str):
+        steps_log = json.loads(steps_log)
+    
+    if current >= len(steps):
+        conn.close()
+        return {"error": "All steps already completed"}
+    
+    step_info = steps[current]
+    
+    # Log this step
+    log_entry = {
+        "step": current,
+        "role": step_info.get("role"),
+        "label": step_info.get("label"),
+        "approver_id": approver_id,
+        "action": action,
+        "comment": comment,
+        "timestamp": str(datetime.now())
+    }
+    steps_log.append(log_entry)
+    
+    if action == "reject":
+        # Rejection stops the whole chain
+        c.execute("UPDATE approval_requests SET status='rejected', steps_log=%s::jsonb, updated_at=NOW() WHERE ref=%s",
+            (json.dumps(steps_log), approval_ref))
+        conn.commit()
+        conn.close()
+        log_audit(approver_id, "reject_approval", req["entity_type"], approval_ref, log_entry)
+        return {"status": "rejected", "step": current, "message": f"Rejected by {step_info['label']}"}
+    
+    # Approve — move to next step
+    next_step = current + 1
+    if next_step >= len(steps):
+        # All steps complete — fully approved
+        c.execute("UPDATE approval_requests SET status='approved', current_step=%s, steps_log=%s::jsonb, updated_at=NOW() WHERE ref=%s",
+            (next_step, json.dumps(steps_log), approval_ref))
+        conn.commit()
+        conn.close()
+        log_audit(approver_id, "final_approve", req["entity_type"], approval_ref, log_entry)
+        return {"status": "approved", "step": current, "message": "Fully approved — all steps complete", "final": True}
+    else:
+        # Move to next step
+        c.execute("UPDATE approval_requests SET current_step=%s, steps_log=%s::jsonb, updated_at=NOW() WHERE ref=%s",
+            (next_step, json.dumps(steps_log), approval_ref))
+        conn.commit()
+        conn.close()
+        next_label = steps[next_step].get("label", f"Step {next_step+1}")
+        log_audit(approver_id, "approve_step", req["entity_type"], approval_ref, log_entry)
+        return {"status": "pending", "step": next_step, "message": f"Approved by {step_info['label']}. Now pending: {next_label}", "final": False}
+
+
+def get_approval_chain(approval_ref):
+    """Get the full approval chain with status of each step."""
+    req = get_approval_request(approval_ref)
+    if not req:
+        return None
+    steps = req.get("workflow_steps", [])
+    if isinstance(steps, str):
+        steps = json.loads(steps)
+    steps_log = req.get("steps_log", [])
+    if isinstance(steps_log, str):
+        steps_log = json.loads(steps_log)
+    
+    chain = []
+    for i, step in enumerate(steps):
+        entry = {
+            "step": i + 1,
+            "role": step.get("role"),
+            "label": step.get("label"),
+            "action_required": step.get("action", "approve"),
+            "status": "pending",
+            "approver": None,
+            "comment": None,
+            "timestamp": None
+        }
+        # Check if this step has been completed
+        for log in steps_log:
+            if log.get("step") == i:
+                entry["status"] = log["action"]
+                entry["approver"] = log.get("approver_id")
+                entry["comment"] = log.get("comment")
+                entry["timestamp"] = log.get("timestamp")
+                break
+        if i == req.get("current_step", 0) and req["status"] == "pending":
+            entry["status"] = "awaiting"
+        elif i > req.get("current_step", 0) and req["status"] == "pending":
+            entry["status"] = "upcoming"
+        chain.append(entry)
+    
+    return {
+        "ref": approval_ref,
+        "entity_type": req["entity_type"],
+        "entity_ref": req.get("entity_ref", ""),
+        "requester_id": req.get("requester_id"),
+        "overall_status": req["status"],
+        "chain": chain
+    }
 

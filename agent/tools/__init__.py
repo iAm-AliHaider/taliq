@@ -133,3 +133,28 @@ from tools.admin_ops import (
     bulk_approve_pending_expenses,
     send_pending_notifications,
 )
+
+from tools.recruitment import (
+    list_job_postings,
+    view_job_details,
+    create_job_posting,
+    list_applications,
+    advance_candidate,
+    show_recruitment_stats,
+    close_job_posting,
+)
+
+from tools.geofencing import (
+    clock_in_gps,
+    clock_out_gps,
+    list_office_locations,
+    manage_geofence,
+)
+
+from tools.approvals import (
+    view_pending_approvals,
+    approve_request,
+    reject_request,
+    view_approval_chain,
+    show_approval_workflows,
+)

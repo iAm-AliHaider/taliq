@@ -91,7 +91,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Templates", "Audit Log"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Geofencing", "Workflows", "Templates", "Audit Log"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -815,6 +815,40 @@ export default function AdminPage() {
         )}
 
         {/* REPORTS */}
+        {tab === "Recruitment" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Recruitment Pipeline</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               {/* Simplified tables for admin view */}
+               <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="text-sm font-bold mb-3">Active Job Postings</h3>
+                 <div className="text-xs text-gray-400 italic">Job postings management UI...</div>
+               </div>
+               <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                 <h3 className="text-sm font-bold mb-3">Recent Applications</h3>
+                 <div className="text-xs text-gray-400 italic">Application tracking UI...</div>
+               </div>
+            </div>
+          </div>
+        )}
+        {tab === "Geofencing" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Geofencing & GPS</h2>
+            <p className="text-xs text-gray-500">Manage office locations and attendance boundaries.</p>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+               <div className="text-xs text-gray-400 italic">Geofence management map and list...</div>
+            </div>
+          </div>
+        )}
+        {tab === "Workflows" && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Approval Workflows</h2>
+            <p className="text-xs text-gray-500">Define multi-level approval chains for leaves, expenses, and loans.</p>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+               <div className="text-xs text-gray-400 italic">Workflow builder UI...</div>
+            </div>
+          </div>
+        )}
         {tab === "Templates" && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Letter Templates</h2>
