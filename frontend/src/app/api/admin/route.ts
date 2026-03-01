@@ -443,16 +443,18 @@ export async function POST(request: NextRequest) {
 
     
     if (action === "create_course") {
-      const { title, description, provider, duration_hours, category, mandatory } = body;
-      await sql`INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory, status) 
-        VALUES (${title}, ${description || ''}, ${provider || 'Internal'}, ${duration_hours || 4}, ${category || 'general'}, ${mandatory ? 1 : 0}, 'available')`;
+      const { title, description, provider, duration_hours, category, mandatory, start_date, end_date, schedule, location, max_seats, materials_url, syllabus } = body;
+      await sql`INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory, status, start_date, end_date, schedule, location, max_seats, materials_url, syllabus) 
+        VALUES (${title}, ${description || ''}, ${provider || 'Internal'}, ${duration_hours || 4}, ${category || 'general'}, ${mandatory ? 1 : 0}, 'available', ${start_date || null}, ${end_date || null}, ${schedule || null}, ${location || null}, ${max_seats || 0}, ${materials_url || null}, ${syllabus || null})`;
       return NextResponse.json({ ok: true });
     }
 
     if (action === "update_course") {
-      const { id, title, description, provider, duration_hours, category, mandatory, status } = body;
+      const { id, title, description, provider, duration_hours, category, mandatory, status, start_date, end_date, schedule, location, max_seats, materials_url, syllabus } = body;
       await sql`UPDATE training_courses SET title=${title}, description=${description}, provider=${provider}, 
-        duration_hours=${duration_hours}, category=${category}, mandatory=${mandatory ? 1 : 0}, status=${status} WHERE id=${id}`;
+        duration_hours=${duration_hours}, category=${category}, mandatory=${mandatory ? 1 : 0}, status=${status},
+        start_date=${start_date || null}, end_date=${end_date || null}, schedule=${schedule || null}, location=${location || null},
+        max_seats=${max_seats || 0}, materials_url=${materials_url || null}, syllabus=${syllabus || null} WHERE id=${id}`;
       return NextResponse.json({ ok: true });
     }
 

@@ -182,7 +182,7 @@ export default function AdminPage() {
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollCourseId, setEnrollCourseId] = useState<number|null>(null);
   const [enrollEmployeeId, setEnrollEmployeeId] = useState("");
-  const [newCourse, setNewCourse] = useState({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false });
+  const [newCourse, setNewCourse] = useState({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false, start_date: "", end_date: "", schedule: "", location: "", max_seats: 0, materials_url: "", syllabus: "" });
   const [editingCourse, setEditingCourse] = useState<any>(null);
   const [interviewData, setInterviewData] = useState<any>(null);
   const [showCreateJob, setShowCreateJob] = useState(false);
@@ -1043,6 +1043,12 @@ export default function AdminPage() {
                   <select value={newJob.employment_type} onChange={e => setNewJob({...newJob, employment_type: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200">
                     <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="internship">Internship</option>
                   </select>
+                  <input type="date" placeholder="Start Date" value={editingCourse ? editingCourse.start_date || "" : newCourse.start_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, start_date: e.target.value}) : setNewCourse({...newCourse, start_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input type="date" placeholder="End Date" value={editingCourse ? editingCourse.end_date || "" : newCourse.end_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, end_date: e.target.value}) : setNewCourse({...newCourse, end_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Location" value={editingCourse ? editingCourse.location || "" : newCourse.location} onChange={e => editingCourse ? setEditingCourse({...editingCourse, location: e.target.value}) : setNewCourse({...newCourse, location: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Schedule (e.g. Mon/Wed 2-4pm)" value={editingCourse ? editingCourse.schedule || "" : newCourse.schedule} onChange={e => editingCourse ? setEditingCourse({...editingCourse, schedule: e.target.value}) : setNewCourse({...newCourse, schedule: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input type="number" placeholder="Max Seats (0=unlimited)" value={editingCourse ? editingCourse.max_seats || 0 : newCourse.max_seats} onChange={e => editingCourse ? setEditingCourse({...editingCourse, max_seats: Number(e.target.value)}) : setNewCourse({...newCourse, max_seats: Number(e.target.value)})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Materials URL" value={editingCourse ? editingCourse.materials_url || "" : newCourse.materials_url} onChange={e => editingCourse ? setEditingCourse({...editingCourse, materials_url: e.target.value}) : setNewCourse({...newCourse, materials_url: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
                 </div>
                 <textarea placeholder="Description" value={newJob.description} onChange={e => setNewJob({...newJob, description: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-16 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
                 <textarea placeholder="Requirements" value={newJob.requirements} onChange={e => setNewJob({...newJob, requirements: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-14 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
@@ -1277,7 +1283,7 @@ export default function AdminPage() {
                 <h3 className="text-sm font-bold text-gray-800">Training & Courses</h3>
                 <p className="text-[11px] text-gray-400">{trainingData?.courses?.length || 0} courses, {trainingData?.enrollments?.length || 0} enrollments</p>
               </div>
-              <button onClick={() => { setShowCreateCourse(true); setEditingCourse(null); setNewCourse({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false }); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-all">+ New Course</button>
+              <button onClick={() => { setShowCreateCourse(true); setEditingCourse(null); setNewCourse({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false, start_date: "", end_date: "", schedule: "", location: "", max_seats: 0, materials_url: "", syllabus: "" }); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-all">+ New Course</button>
             </div>
 
             {/* Course Stats */}
@@ -1319,8 +1325,15 @@ export default function AdminPage() {
                     <option value="safety">Safety</option>
                     <option value="language">Language</option>
                   </select>
+                  <input type="date" placeholder="Start Date" value={editingCourse ? editingCourse.start_date || "" : newCourse.start_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, start_date: e.target.value}) : setNewCourse({...newCourse, start_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input type="date" placeholder="End Date" value={editingCourse ? editingCourse.end_date || "" : newCourse.end_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, end_date: e.target.value}) : setNewCourse({...newCourse, end_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Location" value={editingCourse ? editingCourse.location || "" : newCourse.location} onChange={e => editingCourse ? setEditingCourse({...editingCourse, location: e.target.value}) : setNewCourse({...newCourse, location: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Schedule (e.g. Mon/Wed 2-4pm)" value={editingCourse ? editingCourse.schedule || "" : newCourse.schedule} onChange={e => editingCourse ? setEditingCourse({...editingCourse, schedule: e.target.value}) : setNewCourse({...newCourse, schedule: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input type="number" placeholder="Max Seats (0=unlimited)" value={editingCourse ? editingCourse.max_seats || 0 : newCourse.max_seats} onChange={e => editingCourse ? setEditingCourse({...editingCourse, max_seats: Number(e.target.value)}) : setNewCourse({...newCourse, max_seats: Number(e.target.value)})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                  <input placeholder="Materials URL" value={editingCourse ? editingCourse.materials_url || "" : newCourse.materials_url} onChange={e => editingCourse ? setEditingCourse({...editingCourse, materials_url: e.target.value}) : setNewCourse({...newCourse, materials_url: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
                 </div>
                 <textarea placeholder="Description" value={editingCourse ? editingCourse.description : newCourse.description} onChange={e => editingCourse ? setEditingCourse({...editingCourse, description: e.target.value}) : setNewCourse({...newCourse, description: e.target.value})} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
+                <textarea placeholder="Syllabus / Curriculum outline" value={editingCourse ? editingCourse.syllabus || "" : newCourse.syllabus} onChange={e => editingCourse ? setEditingCourse({...editingCourse, syllabus: e.target.value}) : setNewCourse({...newCourse, syllabus: e.target.value})} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 text-sm text-gray-600">
                     <input type="checkbox" checked={editingCourse ? !!editingCourse.mandatory : newCourse.mandatory} onChange={e => editingCourse ? setEditingCourse({...editingCourse, mandatory: e.target.checked ? 1 : 0}) : setNewCourse({...newCourse, mandatory: e.target.checked})} className="rounded border-gray-300 text-emerald-500 focus:ring-emerald-200" />
@@ -1385,6 +1398,9 @@ export default function AdminPage() {
                         <span>Provider: <strong className="text-gray-600">{course.provider}</strong></span>
                         <span>Duration: <strong className="text-gray-600">{course.duration_hours}h</strong></span>
                         <span>Category: <strong className="text-gray-600">{course.category}</strong></span>
+                        {course.start_date && <span>Starts: <strong className="text-gray-600">{course.start_date}</strong></span>}
+                        {course.location && <span>Location: <strong className="text-gray-600">{course.location}</strong></span>}
+                        {course.schedule && <span>Schedule: <strong className="text-gray-600">{course.schedule}</strong></span>}
                         <span>Enrolled: <strong className="text-blue-600">{course.enrolled_count}</strong></span>
                         <span>Completed: <strong className="text-emerald-600">{course.completed_count}</strong></span>
                       </div>

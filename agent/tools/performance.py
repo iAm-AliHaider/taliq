@@ -109,6 +109,38 @@ async def show_my_trainings(context: RunContext):
     return f"{stats['completed']}/{stats['total_enrolled']} completed. Compliance: {stats['compliance']}%."
 
 
+
+
+@function_tool()
+async def show_training_calendar(context: RunContext):
+    """Show training calendar with enrolled and upcoming courses."""
+    emp_id = get_current_employee_id_from_context()
+    trainings = db.get_my_trainings(emp_id)
+    courses = db.get_available_courses()
+    # Upcoming = courses with start_date in the future
+    upcoming = [c for c in courses if c.get("start_date")]
+    await _send_ui("TrainingCalendarCard", {"trainings": trainings, "upcoming": upcoming}, "main_card")
+    return f"Training calendar showing {len(trainings)} enrollments and {len(upcoming)} upcoming courses."
+
+
+@function_tool()
+async def show_course_materials(context: RunContext, course_id: int):
+    """Show materials, syllabus, and resources for a training course."""
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM training_courses WHERE id = %s", (course_id,))
+    course = db._fetchone(c)
+    conn.close()
+    if not course:
+        return "Course not found."
+    await _send_ui("CourseMaterialsCard", {
+        "courseTitle": course.get("title", ""),
+        "syllabus": course.get("syllabus", ""),
+        "materialsUrl": course.get("materials_url", ""),
+        "materials": [],
+    }, "main_card")
+    return f"Showing materials for {course.get('title', 'course')}."
+
 # ---- GRIEVANCE ----
 
 @function_tool()

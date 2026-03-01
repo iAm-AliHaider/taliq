@@ -51,6 +51,8 @@ from tools.interview import (
 )
 
 from tools.performance import (
+    show_training_calendar,
+    show_course_materials,
     show_my_performance,
     create_performance_review,
     show_my_goals,

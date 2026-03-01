@@ -74,8 +74,9 @@ from tools import (
     start_new_interview, score_current_answer, show_interview_results,
     # Performance / Training / Grievance / Notifications
     show_my_performance, create_performance_review, show_my_goals, set_new_goal, update_goal,
-    show_available_trainings, enroll_in_training, show_my_trainings,
+    show_available_trainings, enroll_in_training, show_my_trainings, show_training_calendar, show_course_materials,
     file_grievance, show_my_grievances, show_notifications,
+    show_training_calendar, show_course_materials,
     # Manager
     show_pending_approvals, approve_leave, show_team_overview, show_department_stats,
     show_leave_calendar, show_dashboard, show_leave_history,
@@ -282,7 +283,7 @@ ALL_TOOLS = [
     # Performance
     show_my_performance, create_performance_review, show_my_goals, set_new_goal, update_goal,
     # Training
-    show_available_trainings, enroll_in_training, show_my_trainings,
+    show_available_trainings, enroll_in_training, show_my_trainings, show_training_calendar, show_course_materials,
     # Grievance
     file_grievance, show_my_grievances,
     # Notifications

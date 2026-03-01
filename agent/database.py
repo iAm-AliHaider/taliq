@@ -578,6 +578,19 @@ def init_db():
         _seed_data(c)
         conn.commit()
 
+    # Add new columns if missing
+    try:
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS start_date TEXT")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS end_date TEXT")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS schedule TEXT")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS location TEXT")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS max_seats INTEGER DEFAULT 0")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS materials_url TEXT")
+        c.execute("ALTER TABLE training_courses ADD COLUMN IF NOT EXISTS syllabus TEXT")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+
     c.execute("SELECT COUNT(*) FROM training_courses")
     if c.fetchone()[0] == 0:
         _seed_training_courses(c)
