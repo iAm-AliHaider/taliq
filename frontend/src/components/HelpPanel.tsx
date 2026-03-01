@@ -34,6 +34,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "My status overview", prompt: "Show my status", icon: "📋" },
       { label: "Show all my requests", prompt: "Show my requests", icon: "📄" },
       { label: "Show announcements", prompt: "Show announcements", icon: "📢" },
+      { label: "Acknowledge announcement", prompt: "Acknowledge the latest announcement", icon: "✅" },
       { label: "Show notifications", prompt: "Show notifications", icon: "🔔" },
     ],
   },
@@ -61,6 +62,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Clock out with GPS", prompt: "Clock me out with GPS", icon: "📍" },
       { label: "Show my attendance", prompt: "Show my attendance", icon: "📋" },
       { label: "Request overtime", prompt: "Request overtime approval", icon: "⏱️" },
+      { label: "Team attendance", prompt: "Show team attendance", icon: "👥" },
     ],
   },
   {
@@ -72,6 +74,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Show pay slip", prompt: "Show my pay slip", icon: "💵" },
       { label: "GOSI breakdown", prompt: "Show my GOSI breakdown", icon: "🏛️" },
       { label: "End of service estimate", prompt: "Show my end of service", icon: "📊" },
+      { label: "Salary breakdown", prompt: "Show my salary breakdown", icon: "📊" },
       { label: "Payment history", prompt: "Show my payments", icon: "💳" },
     ],
   },
@@ -110,6 +113,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Show my expenses", prompt: "Show my expenses", icon: "📋" },
       { label: "Submit a claim", prompt: "Submit a claim", icon: "➕" },
       { label: "Show my claims", prompt: "Show my claims", icon: "📋" },
+      { label: "Show my payments", prompt: "Show my payment history", icon: "💳" },
     ],
   },
   {
@@ -131,6 +135,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Show my goals", prompt: "Show my goals", icon: "🎯" },
       { label: "Set a new goal", prompt: "Set a new goal", icon: "➕" },
       { label: "Update goal progress", prompt: "Update my goal progress", icon: "📈" },
+      { label: "Create performance review", prompt: "Create a performance review", icon: "📝" },
     ],
   },
   {
@@ -141,6 +146,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
     commands: [
       { label: "Available courses", prompt: "Show available trainings", icon: "📚" },
       { label: "Enroll in course", prompt: "Enroll in a training course", icon: "✏️" },
+      { label: "Show training progress", prompt: "Show my training progress", icon: "📈" },
       { label: "My trainings", prompt: "Show my trainings", icon: "📋" },
     ],
   },
@@ -152,6 +158,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
     commands: [
       { label: "File a complaint", prompt: "File a grievance", icon: "✏️" },
       { label: "Show my grievances", prompt: "Show my grievances", icon: "📋" },
+      { label: "File harassment complaint", prompt: "File a harassment grievance", icon: "🚨" },
     ],
   },
   {
@@ -161,6 +168,8 @@ const COMMAND_SECTIONS: CommandSection[] = [
     role: "all",
     commands: [
       { label: "Generate letter", prompt: "Generate an employment certificate", icon: "📄" },
+      { label: "Salary certificate", prompt: "Generate a salary certificate", icon: "💰" },
+      { label: "Experience letter", prompt: "Generate an experience letter", icon: "📜" },
       { label: "Show my letters", prompt: "Show my letters", icon: "📋" },
     ],
   },
@@ -172,6 +181,8 @@ const COMMAND_SECTIONS: CommandSection[] = [
     commands: [
       { label: "Show my assets", prompt: "Show my assets", icon: "🖥️" },
       { label: "Show my shift", prompt: "Show my shift schedule", icon: "📅" },
+      { label: "Show payroll report", prompt: "Show payroll summary", icon: "💰" },
+      { label: "Show HR report", prompt: "Show HR report", icon: "📊" },
     ],
   },
   {
@@ -192,6 +203,7 @@ const COMMAND_SECTIONS: CommandSection[] = [
     commands: [
       { label: "Initiate resignation", prompt: "I want to resign", icon: "🚪" },
       { label: "Check exit status", prompt: "Show my exit status", icon: "📋" },
+      { label: "Show all exit requests", prompt: "Show all exit requests", icon: "📋" },
     ],
   },
   // ── Manager-only ──
@@ -269,6 +281,8 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Create job posting", prompt: "Create a new job posting", icon: "➕" },
       { label: "List applications", prompt: "List all applications", icon: "👥" },
       { label: "Recruitment stats", prompt: "Show recruitment stats", icon: "📊" },
+      { label: "View job details", prompt: "View details of a job posting", icon: "📄" },
+      { label: "Advance candidate", prompt: "Advance a candidate to next stage", icon: "⏩" },
       { label: "Close job posting", prompt: "Close a job posting", icon: "🔒" },
     ],
   },
@@ -290,6 +304,8 @@ const COMMAND_SECTIONS: CommandSection[] = [
     commands: [
       { label: "View pending approvals", prompt: "View pending workflow approvals", icon: "📋" },
       { label: "View approval chain", prompt: "Show the approval chain", icon: "🔗" },
+      { label: "Approve workflow request", prompt: "Approve a pending workflow request", icon: "✅" },
+      { label: "Reject workflow request", prompt: "Reject a pending workflow request", icon: "❌" },
       { label: "Show all workflows", prompt: "Show approval workflows", icon: "🔄" },
     ],
   },
