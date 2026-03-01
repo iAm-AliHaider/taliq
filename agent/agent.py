@@ -33,6 +33,19 @@ from livekit.plugins import deepgram, openai, silero
 from livekit import rtc
 
 import database as db
+
+# Smart Turn v3.2 — intelligent turn detection
+try:
+    from smart_turn import SmartTurnDetector
+    _smart_turn = SmartTurnDetector(threshold=0.5, use_gpu=True)
+    if _smart_turn.available:
+        logger.info("Smart Turn v3.2 loaded — enhanced turn detection active")
+    else:
+        logger.warning("Smart Turn model not available — using VAD-only")
+        _smart_turn = None
+except Exception as e:
+    logger.warning(f"Smart Turn import failed: {e} — using VAD-only")
+    _smart_turn = None
 from edge_tts_plugin import EdgeTTS
 
 # Import all tools and core utilities from modular tools package
