@@ -437,6 +437,24 @@ def init_db():
         completed_at TIMESTAMP
     )""")
 
+
+    # --- Letter Templates ---
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS letter_templates (
+        id SERIAL PRIMARY KEY,
+        type TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        name_ar TEXT DEFAULT '',
+        body_html TEXT NOT NULL,
+        body_html_ar TEXT DEFAULT '',
+        header JSONB DEFAULT '{}',
+        footer JSONB DEFAULT '{}',
+        variables TEXT[] DEFAULT '{}',
+        is_active BOOLEAN DEFAULT TRUE,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        updated_by TEXT DEFAULT 'system'
+    )""")
+
     # --- Audit Log ---
     c.execute("""
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -597,6 +615,49 @@ def init_db():
         for iv in iqama_seed:
             c.execute("INSERT INTO iqama_visa (employee_id, document_type, document_number, issue_date, expiry_date, status, cost) VALUES (%s,%s,%s,%s,%s,%s,%s)", iv)
         conn.commit()
+
+    # --- Seed Letter Templates ---
+    _templates = [
+        ("employment_certificate", "Employment Certificate",
+         "This is to certify that <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}, Nationality: {{nationality}}) has been employed at <strong>{{companyName}}</strong> as <strong>{{position}}</strong> in the <strong>{{department}}</strong> department since <strong>{{joinDate}}</strong>.\n\n{{#if purpose}}This certificate is issued upon the employee\'s request for the purpose of {{purpose}}.{{else}}This certificate is issued upon the employee\'s request.{{/if}}",
+         ["employeeName","employeeId","nationality","position","department","joinDate","purpose","companyName"]),
+        ("salary_certificate", "Salary Certificate",
+         "This is to certify that <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}) is employed as <strong>{{position}}</strong> in the <strong>{{department}}</strong> department.\n\nThe employee\'s monthly compensation is as follows:\n\n<table class=\'salary-table\'><tr><td>Basic Salary</td><td><strong>{{basicSalary}} SAR</strong></td></tr><tr><td>Housing Allowance</td><td><strong>{{housingAllowance}} SAR</strong></td></tr><tr><td>Transport Allowance</td><td><strong>{{transportAllowance}} SAR</strong></td></tr><tr><td><strong>Total Monthly</strong></td><td><strong>{{totalSalary}} SAR</strong></td></tr></table>\n\nThis certificate is issued upon the employee\'s request.",
+         ["employeeName","employeeId","position","department","basicSalary","housingAllowance","transportAllowance","totalSalary"]),
+        ("experience_letter", "Experience Letter",
+         "This is to certify that <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}) has been working with <strong>{{companyName}}</strong> since <strong>{{joinDate}}</strong> as <strong>{{position}}</strong> in the <strong>{{department}}</strong> department.\n\nDuring their tenure, they have demonstrated excellent professional conduct, dedication, and competence in their role. We wish them continued success in all their future endeavors.",
+         ["employeeName","employeeId","position","department","joinDate","companyName"]),
+        ("noc_letter", "No Objection Certificate",
+         "This is to confirm that we have No Objection to <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}), currently employed as <strong>{{position}}</strong> in the <strong>{{department}}</strong> department{{#if purpose}}, for the purpose of {{purpose}}{{/if}}.\n\nThis NOC is issued at the employee\'s request and does not relieve them of their current contractual obligations with the organization.",
+         ["employeeName","employeeId","position","department","purpose"]),
+        ("bank_letter", "Bank Letter",
+         "This is to confirm that <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}) is a full-time employee of <strong>{{companyName}}</strong>, serving as <strong>{{position}}</strong> in the <strong>{{department}}</strong> department since <strong>{{joinDate}}</strong>.\n\nThe employee\'s salary is credited monthly to their bank account via the Wage Protection System (WPS).\n\nTotal Monthly Salary: <strong>{{totalSalary}} SAR</strong>\n\nThis letter is issued for banking purposes at the employee\'s request.",
+         ["employeeName","employeeId","position","department","joinDate","totalSalary","companyName"]),
+        ("promotion_letter", "Promotion Letter",
+         "We are pleased to confirm that <strong>{{employeeName}}</strong> (Employee ID: {{employeeId}}) has been promoted to the position of <strong>{{position}}</strong> in the <strong>{{department}}</strong> department, effective immediately.\n\nThis promotion is in recognition of their outstanding dedication, performance, and valuable contributions to <strong>{{companyName}}</strong>. We are confident they will continue to excel in their new role.",
+         ["employeeName","employeeId","position","department","companyName"]),
+    ]
+    _default_header = json.dumps({
+        "companyName": "MORABAHA MRNA",
+        "companyNameAr": "",
+        "subtitle": "Kingdom of Saudi Arabia",
+        "logoUrl": "",
+        "accentColor": "#10B981",
+    })
+    _default_footer = json.dumps({
+        "signatoryName": "Authorized Signatory",
+        "signatoryTitle": "Human Resources Department",
+        "showRef": True,
+        "showDate": True,
+        "disclaimer": "This document is computer-generated and valid without a stamp.",
+    })
+    for _t_type, _t_name, _t_body, _t_vars in _templates:
+        c.execute("""INSERT INTO letter_templates (type, name, body_html, header, footer, variables)
+            VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s)
+            ON CONFLICT (type) DO NOTHING""",
+            (_t_type, _t_name, _t_body, _default_header, _default_footer, _t_vars))
+    conn.commit()
+
 
 
     conn.close()
@@ -2999,4 +3060,72 @@ def mark_notifications_delivered(notification_ids, channel="whatsapp"):
     conn.commit()
     conn.close()
     return {"marked": len(notification_ids)}
+
+
+# ============================================================
+# LETTER TEMPLATES
+# ============================================================
+
+def get_letter_templates():
+    """Get all letter templates."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM letter_templates WHERE is_active = TRUE ORDER BY name")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+
+def get_letter_template(template_type):
+    """Get a specific letter template by type."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM letter_templates WHERE type = %s AND is_active = TRUE", (template_type,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+
+def update_letter_template(template_type, updates, updated_by="admin"):
+    """Update a letter template. updates is a dict with optional keys:
+    name, body_html, body_html_ar, header, footer, variables."""
+    conn = get_db()
+    c = conn.cursor()
+    sets = []
+    params = []
+    for key in ["name", "name_ar", "body_html", "body_html_ar"]:
+        if key in updates:
+            sets.append(f"{key} = %s")
+            params.append(updates[key])
+    for key in ["header", "footer"]:
+        if key in updates:
+            sets.append(f"{key} = %s::jsonb")
+            params.append(json.dumps(updates[key]))
+    if "variables" in updates:
+        sets.append("variables = %s")
+        params.append(updates["variables"])
+    sets.append("updated_at = NOW()")
+    sets.append("updated_by = %s")
+    params.append(updated_by)
+    params.append(template_type)
+    c.execute(f"UPDATE letter_templates SET {', '.join(sets)} WHERE type = %s", tuple(params))
+    conn.commit()
+    conn.close()
+    log_audit(updated_by, "update_letter_template", "template", template_type, {"fields": list(updates.keys())})
+    return get_letter_template(template_type)
+
+
+def create_letter_template(template_type, name, body_html, variables=None, header=None, footer=None):
+    """Create a new custom letter template."""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""INSERT INTO letter_templates (type, name, body_html, variables, header, footer)
+        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb) RETURNING id""",
+        (template_type, name, body_html, variables or [],
+         json.dumps(header or {}), json.dumps(footer or {})))
+    conn.commit()
+    row_id = c.fetchone()[0]
+    conn.close()
+    log_audit("admin", "create_letter_template", "template", template_type, {"name": name})
+    return {"id": row_id, "type": template_type}
 

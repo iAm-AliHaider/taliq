@@ -1,6 +1,6 @@
 "use client";
 
-import { generateLetterPDF } from "@/lib/pdf";
+import { generateLetterPDFFromTemplate } from "@/lib/pdf";
 
 interface Props {
   ref?: string;
@@ -87,7 +87,7 @@ export function LetterCard(props: Props) {
           )}
         </div>
         {props.purpose && <div className="text-xs text-gray-500"><span className="font-medium">Purpose:</span> {props.purpose}</div>}
-        <button onClick={() => generateLetterPDF(props)} className="w-full py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2">
+        <button onClick={() => generateLetterPDFFromTemplate(props)} className="w-full py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           Download PDF
         </button>

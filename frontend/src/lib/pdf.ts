@@ -341,3 +341,230 @@ export function generatePayslipPDF(data: SalaryData) {
   addFooter(doc, "", data.employeeId, 1);
   doc.save(`payslip_${data.employeeId}_${data.month.replace(/\s/g, "_")}.pdf`);
 }
+
+
+// ── Template-aware PDF generation ────────────────────────────
+
+interface TemplateData {
+  type: string;
+  name: string;
+  body_html: string;
+  header: {
+    companyName?: string;
+    companyNameAr?: string;
+    subtitle?: string;
+    accentColor?: string;
+  };
+  footer: {
+    signatoryName?: string;
+    signatoryTitle?: string;
+    showRef?: boolean;
+    showDate?: boolean;
+    disclaimer?: string;
+  };
+}
+
+let _templateCache: TemplateData[] | null = null;
+
+async function fetchTemplates(): Promise<TemplateData[]> {
+  if (_templateCache) return _templateCache;
+  try {
+    const res = await fetch("/api/templates");
+    if (res.ok) {
+      _templateCache = await res.json();
+      return _templateCache!;
+    }
+  } catch { /* fallback to hardcoded */ }
+  return [];
+}
+
+function renderMustache(template: string, vars: Record<string, string>): string {
+  let result = template;
+  for (const [key, val] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), val || "");
+  }
+  result = result.replace(/\{\{#if (\w+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, v, content) => {
+    return vars[v] ? content : "";
+  });
+  result = result.replace(/\{\{[^}]+\}\}/g, "");
+  result = result.replace(/\\n/g, "\n");
+  return result;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<strong>/g, "").replace(/<\/strong>/g, "")
+    .replace(/<br\s*\/?>/g, "\n")
+    .replace(/<table[^>]*>[\s\S]*?<\/table>/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/\n\n+/g, "\n\n")
+    .trim();
+}
+
+export async function generateLetterPDFFromTemplate(data: LetterData) {
+  const templates = await fetchTemplates();
+  const tpl = templates.find(t => t.type === data.letterType);
+
+  if (!tpl) {
+    // Fallback to hardcoded generation
+    return generateLetterPDF(data);
+  }
+
+  const vars: Record<string, string> = {
+    employeeName: data.employeeName,
+    employeeId: data.employeeId,
+    nationality: data.nationality || "N/A",
+    position: data.position,
+    department: data.department,
+    joinDate: data.joinDate,
+    purpose: data.purpose || "",
+    companyName: tpl.header.companyName || data.companyName || "MORABAHA MRNA",
+    basicSalary: data.basicSalary?.toLocaleString() || "0",
+    housingAllowance: data.housingAllowance?.toLocaleString() || "0",
+    transportAllowance: data.transportAllowance?.toLocaleString() || "0",
+    totalSalary: data.totalSalary?.toLocaleString() || "0",
+    letterDate: data.letterDate,
+    addressedTo: data.addressedTo || "To Whom It May Concern",
+  };
+
+  const renderedBody = stripHtml(renderMustache(tpl.body_html, vars));
+  const company = tpl.header.companyName || data.companyName || "MORABAHA MRNA";
+  const accent = tpl.header.accentColor || "#10B981";
+  const accentRGB = hexToRgb(accent);
+
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  // Header with template accent color
+  doc.setFillColor(accentRGB.r, accentRGB.g, accentRGB.b);
+  doc.rect(0, 0, 210, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(accentRGB.r, accentRGB.g, accentRGB.b);
+  doc.text(company, 20, 22);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(tpl.header.subtitle || "Kingdom of Saudi Arabia", 20, 28);
+  doc.setDrawColor(accentRGB.r, accentRGB.g, accentRGB.b);
+  doc.setLineWidth(0.5);
+  doc.line(20, 33, 190, 33);
+
+  // Date
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(data.letterDate, 190, 42, { align: "right" });
+
+  // To
+  doc.setTextColor(60, 60, 60);
+  doc.text("To:", 20, 50);
+  doc.setFont("helvetica", "bold");
+  doc.text(vars.addressedTo, 30, 50);
+
+  // Subject
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(30, 30, 30);
+  const subject = `RE: ${tpl.name}`;
+  const sw = doc.getTextWidth(subject);
+  doc.text(subject, 105 - sw / 2, 64);
+  doc.setDrawColor(30, 30, 30);
+  doc.setLineWidth(0.3);
+  doc.line(105 - sw / 2 - 2, 65, 105 + sw / 2 + 2, 65);
+
+  // Body
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(40, 40, 40);
+  let y = 78;
+  const paragraphs = renderedBody.split("\n\n").filter(p => p.trim());
+  for (const para of paragraphs) {
+    const lines = doc.splitTextToSize(para.trim(), 165);
+    for (const line of lines) {
+      if (y > 240) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, 20, y);
+      y += 6;
+    }
+    y += 4;
+  }
+
+  // Salary table for salary/bank letters
+  if (data.letterType === "salary_certificate" || data.letterType === "bank_letter") {
+    y += 4;
+    const rows = [
+      ["Basic Salary", `${data.basicSalary?.toLocaleString()} SAR`],
+      ["Housing Allowance", `${data.housingAllowance?.toLocaleString()} SAR`],
+      ["Transport Allowance", `${data.transportAllowance?.toLocaleString()} SAR`],
+      ["Total Monthly Salary", `${data.totalSalary?.toLocaleString()} SAR`],
+    ];
+    for (const [label, val] of rows) {
+      const isTotal = label.includes("Total");
+      doc.setFont("helvetica", isTotal ? "bold" : "normal");
+      doc.setFontSize(10);
+      if (isTotal) {
+        doc.setFillColor(240, 253, 244);
+        doc.rect(20, y - 4, 165, 7, "F");
+      }
+      doc.setTextColor(60, 60, 60);
+      doc.text(label, 25, y);
+      doc.text(val, 180, y, { align: "right" });
+      y += 7;
+    }
+    y += 4;
+  }
+
+  // Closing
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(40, 40, 40);
+  const closing = doc.splitTextToSize("Should you require any further information, please do not hesitate to contact the Human Resources department.", 165);
+  for (const line of closing) { doc.text(line, 20, y); y += 6; }
+
+  // Signature from template footer
+  y += 20;
+  doc.setFontSize(10);
+  doc.text("Yours sincerely,", 20, y);
+  y += 25;
+  doc.setDrawColor(150, 150, 150);
+  doc.line(20, y, 80, y);
+  y += 5;
+  doc.setFont("helvetica", "bold");
+  doc.text(tpl.footer.signatoryName || "Authorized Signatory", 20, y);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  doc.text(tpl.footer.signatoryTitle || "Human Resources Department", 20, y);
+
+  // Footer
+  const fy = 275;
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(20, fy, 190, fy);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(160, 160, 160);
+  const footerParts: string[] = [];
+  if (tpl.footer.showRef !== false) footerParts.push(`Ref: ${data.ref || "N/A"}`);
+  if (tpl.footer.showDate !== false) footerParts.push(`Date: ${data.letterDate}`);
+  footerParts.push(`Employee: ${data.employeeId}`);
+  footerParts.push("Generated by Taliq HR Platform");
+  doc.text(footerParts.join(" | "), 20, fy + 5);
+  if (tpl.footer.disclaimer) {
+    doc.text(tpl.footer.disclaimer, 20, fy + 9);
+  }
+
+  doc.save(`${data.letterType}_${data.employeeId}_${data.letterDate}.pdf`);
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16),
+  } : { r: 16, g: 185, b: 129 };
+}
