@@ -33,6 +33,8 @@ import { GoalsCard } from "./taliq/GoalsCard";
 import { TrainingCatalogCard } from "./taliq/TrainingCatalogCard";
 import { TrainingCalendarCard } from "./taliq/TrainingCalendarCard";
 import { CourseMaterialsCard } from "./taliq/CourseMaterialsCard";
+import { ExamCard } from "./taliq/ExamCard";
+import { ExamResultsCard } from "./taliq/ExamResultsCard";
 import { MyTrainingsCard } from "./taliq/MyTrainingsCard";
 import { GrievanceListCard } from "./taliq/GrievanceListCard";
 import { NotificationCard } from "./taliq/NotificationCard";
@@ -110,6 +112,8 @@ const COMPONENT_MAP: Record<string, React.ComponentType<any>> = {
   TrainingCatalogCard,
   TrainingCalendarCard,
   CourseMaterialsCard,
+  ExamCard,
+  ExamResultsCard,
   MyTrainingsCard,
   GrievanceListCard,
   NotificationCard,

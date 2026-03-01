@@ -93,7 +93,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Templates", "Audit Log"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Exams", "Templates", "Audit Log"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -184,6 +184,13 @@ export default function AdminPage() {
   const [enrollEmployeeId, setEnrollEmployeeId] = useState("");
   const [newCourse, setNewCourse] = useState({ title: "", description: "", provider: "Internal", duration_hours: 4, category: "general", mandatory: false, start_date: "", end_date: "", schedule: "", location: "", max_seats: 0, materials_url: "", syllabus: "" });
   const [editingCourse, setEditingCourse] = useState<any>(null);
+  const [examData, setExamData] = useState<any>(null);
+  const [showCreateExam, setShowCreateExam] = useState(false);
+  const [showAddQuestion, setShowAddQuestion] = useState<number|null>(null);
+  const [newExam, setNewExam] = useState({ course_id: "", title: "", description: "", passing_score: 70, time_limit_minutes: 30, max_attempts: 3, exam_type: "training" });
+  const [newQuestion, setNewQuestion] = useState({ question: "", options: ["", "", "", ""], correct_answer: "", explanation: "" });
+  const [showAddMaterial, setShowAddMaterial] = useState<number|null>(null);
+  const [newMaterial, setNewMaterial] = useState({ title: "", type: "link", url: "" });
   const [interviewData, setInterviewData] = useState<any>(null);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateFence, setShowCreateFence] = useState(false);
@@ -1403,9 +1410,11 @@ export default function AdminPage() {
                         {course.schedule && <span>Schedule: <strong className="text-gray-600">{course.schedule}</strong></span>}
                         <span>Enrolled: <strong className="text-blue-600">{course.enrolled_count}</strong></span>
                         <span>Completed: <strong className="text-emerald-600">{course.completed_count}</strong></span>
+                        <span>Materials: <strong className="text-violet-600">{(trainingData?.materials || []).filter((m: any) => m.course_id === course.id).length}</strong></span>
                       </div>
                     </div>
                     <div className="flex gap-1.5 ml-3">
+                      <button onClick={() => setShowAddMaterial(showAddMaterial === course.id ? null : course.id)} className="px-2.5 py-1 rounded-lg bg-violet-50 border border-violet-200 text-[10px] text-violet-600 font-semibold hover:bg-violet-100">Materials</button>
                       <button onClick={() => { setEnrollCourseId(course.id); setShowEnrollModal(true); }} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-[10px] text-blue-600 font-semibold hover:bg-blue-100">Enroll</button>
                       <button onClick={() => { setEditingCourse({...course}); setShowCreateCourse(true); }} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600 font-semibold hover:bg-emerald-100">Edit</button>
                       <button onClick={async () => {
@@ -1459,6 +1468,201 @@ export default function AdminPage() {
                               </div>
                             )}
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+
+        {tab === "Exams" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-800">Exams & Assessments</h3>
+                <p className="text-[11px] text-gray-400">{examData?.exams?.length || 0} exams, {examData?.attempts?.length || 0} attempts</p>
+              </div>
+              <button onClick={() => setShowCreateExam(true)} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600">+ New Exam</button>
+            </div>
+
+            {/* Stats */}
+            {examData?.exams && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
+                  <p className="text-lg font-bold text-blue-700">{examData.exams.length}</p>
+                  <p className="text-[10px] text-blue-600">Total Exams</p>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <p className="text-lg font-bold text-emerald-700">{examData.exams.filter((e: any) => e.is_active).length}</p>
+                  <p className="text-[10px] text-emerald-600">Active</p>
+                </div>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <p className="text-lg font-bold text-amber-700">{examData.attempts?.length || 0}</p>
+                  <p className="text-[10px] text-amber-600">Attempts</p>
+                </div>
+                <div className="p-3 rounded-xl bg-violet-50 border border-violet-100">
+                  <p className="text-lg font-bold text-violet-700">{examData.attempts?.filter((a: any) => a.passed).length || 0}</p>
+                  <p className="text-[10px] text-violet-600">Passed</p>
+                </div>
+              </div>
+            )}
+
+            {/* Create Exam Form */}
+            {showCreateExam && (
+              <div className="p-4 rounded-xl bg-white border border-emerald-200 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-gray-800">Create New Exam</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input placeholder="Exam Title *" value={newExam.title} onChange={e => setNewExam({...newExam, title: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-emerald-200" />
+                  <select value={newExam.exam_type} onChange={e => setNewExam({...newExam, exam_type: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none">
+                    <option value="training">Training Verification</option>
+                    <option value="interview">Interview Assessment</option>
+                    <option value="certification">Certification</option>
+                  </select>
+                  <select value={newExam.course_id} onChange={e => setNewExam({...newExam, course_id: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none">
+                    <option value="">No linked course (standalone)</option>
+                    {(trainingData?.courses || []).map((c: any) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="Pass %" value={newExam.passing_score} onChange={e => setNewExam({...newExam, passing_score: Number(e.target.value)})} className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                    <input type="number" placeholder="Time (min)" value={newExam.time_limit_minutes} onChange={e => setNewExam({...newExam, time_limit_minutes: Number(e.target.value)})} className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                    <input type="number" placeholder="Max tries" value={newExam.max_attempts} onChange={e => setNewExam({...newExam, max_attempts: Number(e.target.value)})} className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                  </div>
+                </div>
+                <textarea placeholder="Description" value={newExam.description} onChange={e => setNewExam({...newExam, description: e.target.value})} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setShowCreateExam(false)} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium">Cancel</button>
+                  <button onClick={async () => {
+                    await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "create_exam", ...newExam, course_id: newExam.course_id || null }) });
+                    setShowCreateExam(false); setExamData(null);
+                    fetch("/api/admin?section=exams").then(r => r.json()).then(setExamData);
+                  }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold">Create Exam</button>
+                </div>
+              </div>
+            )}
+
+            {/* Add Question Form */}
+            {showAddQuestion && (
+              <div className="p-4 rounded-xl bg-white border border-blue-200 shadow-sm space-y-3">
+                <h4 className="text-sm font-bold text-gray-800">Add Question to Exam #{showAddQuestion}</h4>
+                <input placeholder="Question *" value={newQuestion.question} onChange={e => setNewQuestion({...newQuestion, question: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                <div className="grid grid-cols-2 gap-2">
+                  {newQuestion.options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input type="radio" name="correct" checked={newQuestion.correct_answer === opt && opt !== ""} onChange={() => setNewQuestion({...newQuestion, correct_answer: opt})} className="text-emerald-500" />
+                      <input placeholder={`Option ${i+1}`} value={opt} onChange={e => { const opts = [...newQuestion.options]; opts[i] = e.target.value; setNewQuestion({...newQuestion, options: opts}); }} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-400">Select the radio button next to the correct answer</p>
+                <input placeholder="Explanation (shown after answering)" value={newQuestion.explanation} onChange={e => setNewQuestion({...newQuestion, explanation: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none" />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setShowAddQuestion(null); setNewQuestion({ question: "", options: ["","","",""], correct_answer: "", explanation: "" }); }} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium">Cancel</button>
+                  <button onClick={async () => {
+                    const opts = newQuestion.options.filter(o => o.trim());
+                    await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "add_exam_question", exam_id: showAddQuestion, question: newQuestion.question, options: opts, correct_answer: newQuestion.correct_answer, explanation: newQuestion.explanation }) });
+                    setShowAddQuestion(null); setNewQuestion({ question: "", options: ["","","",""], correct_answer: "", explanation: "" }); setExamData(null);
+                    fetch("/api/admin?section=exams").then(r => r.json()).then(setExamData);
+                  }} className="px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold">Add Question</button>
+                </div>
+              </div>
+            )}
+
+            {/* Exam List */}
+            <div className="space-y-3">
+              {(examData?.exams || []).map((exam: any) => {
+                const examQuestions = (examData?.questions || []).filter((q: any) => q.exam_id === exam.id);
+                return (
+                  <div key={exam.id} className="rounded-xl bg-white border border-gray-100 overflow-hidden">
+                    <div className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h5 className="text-sm font-bold text-gray-800">{exam.title}</h5>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${exam.is_active ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-500"}`}>{exam.is_active ? "Active" : "Inactive"}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${exam.exam_type === "interview" ? "bg-violet-100 text-violet-600" : exam.exam_type === "certification" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>{exam.exam_type}</span>
+                          </div>
+                          {exam.description && <p className="text-[11px] text-gray-500 mb-2">{exam.description}</p>}
+                          <div className="flex flex-wrap gap-3 text-[10px] text-gray-400">
+                            {exam.course_title && <span>Course: <strong className="text-gray-600">{exam.course_title}</strong></span>}
+                            <span>Questions: <strong className="text-gray-600">{exam.question_count}</strong></span>
+                            <span>Pass: <strong className="text-gray-600">{exam.passing_score}%</strong></span>
+                            <span>Time: <strong className="text-gray-600">{exam.time_limit_minutes}min</strong></span>
+                            <span>Attempts: <strong className="text-blue-600">{exam.attempt_count}</strong></span>
+                            {exam.avg_score && <span>Avg Score: <strong className="text-emerald-600">{exam.avg_score}%</strong></span>}
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 ml-3">
+                          <button onClick={() => setShowAddQuestion(exam.id)} className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-[10px] text-blue-600 font-semibold hover:bg-blue-100">+ Question</button>
+                          <button onClick={async () => {
+                            await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "toggle_exam", id: exam.id }) });
+                            setExamData(null); fetch("/api/admin?section=exams").then(r => r.json()).then(setExamData);
+                          }} className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-[10px] text-amber-600 font-semibold hover:bg-amber-100">{exam.is_active ? "Deactivate" : "Activate"}</button>
+                          <button onClick={async () => {
+                            if (!confirm("Delete this exam and all questions/attempts?")) return;
+                            await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "delete_exam", id: exam.id }) });
+                            setExamData(null); fetch("/api/admin?section=exams").then(r => r.json()).then(setExamData);
+                          }} className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-[10px] text-red-600 font-semibold hover:bg-red-100">Delete</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Questions */}
+                    {examQuestions.length > 0 && (
+                      <div className="border-t border-gray-50 px-4 py-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Questions</p>
+                        {examQuestions.map((q: any, qi: number) => (
+                          <div key={q.id} className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0">
+                            <div className="flex items-start gap-2 flex-1">
+                              <span className="text-[10px] font-bold text-gray-300 mt-0.5">{qi+1}.</span>
+                              <div>
+                                <p className="text-xs text-gray-700">{q.question}</p>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {(typeof q.options === 'string' ? JSON.parse(q.options) : q.options || []).map((o: string, oi: number) => (
+                                    <span key={oi} className={`px-1.5 py-0.5 rounded text-[9px] ${o === q.correct_answer ? "bg-emerald-100 text-emerald-700 font-bold" : "bg-gray-100 text-gray-500"}`}>{o}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                            <button onClick={async () => {
+                              await fetch("/api/admin", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ action: "delete_exam_question", id: q.id }) });
+                              setExamData(null); fetch("/api/admin?section=exams").then(r => r.json()).then(setExamData);
+                            }} className="px-2 py-0.5 rounded bg-red-50 text-[9px] text-red-500 hover:bg-red-100 ml-2">Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Recent Attempts */}
+            {examData?.attempts?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Attempts</h4>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-gray-50 text-gray-500">
+                      <th className="px-3 py-2 text-left font-medium">Participant</th>
+                      <th className="px-3 py-2 text-left font-medium">Exam</th>
+                      <th className="px-3 py-2 text-left font-medium">Score</th>
+                      <th className="px-3 py-2 text-left font-medium">Result</th>
+                      <th className="px-3 py-2 text-left font-medium">Date</th>
+                    </tr></thead>
+                    <tbody>
+                      {examData.attempts.slice(0, 20).map((a: any) => (
+                        <tr key={a.id} className="border-t border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-3 py-2 font-medium text-gray-700">{a.participant_name || a.participant_id}</td>
+                          <td className="px-3 py-2 text-gray-600">{a.exam_title}</td>
+                          <td className="px-3 py-2 font-bold text-gray-700">{a.score != null ? `${a.score}%` : "-"}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${a.passed ? "bg-emerald-100 text-emerald-600" : a.score != null ? "bg-red-100 text-red-500" : "bg-gray-100 text-gray-400"}`}>{a.passed ? "Passed" : a.score != null ? "Failed" : "In Progress"}</span>
+                          </td>
+                          <td className="px-3 py-2 text-gray-400">{String(a.started_at || "").slice(0, 10)}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -53,6 +53,11 @@ from tools.interview import (
 from tools.performance import (
     show_training_calendar,
     show_course_materials,
+    list_available_exams,
+    start_exam,
+    submit_exam_answers,
+    show_my_exam_history,
+    show_course_content,
     show_my_performance,
     create_performance_review,
     show_my_goals,

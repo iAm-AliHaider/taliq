@@ -148,6 +148,11 @@ const COMMAND_SECTIONS: CommandSection[] = [
       { label: "Enroll in course", prompt: "Enroll in a training course", icon: "✏️" },
       { label: "Show training progress", prompt: "Show my training progress", icon: "📈" },
       { label: "My trainings", prompt: "Show my trainings", icon: "📋" },
+      { label: "Training calendar", prompt: "Show my training calendar", icon: "📅" },
+      { label: "Course materials", prompt: "Show course materials for course 1", icon: "📚" },
+      { label: "Available exams", prompt: "Show available exams", icon: "📝" },
+      { label: "Take an exam", prompt: "Start the safety exam", icon: "✍️" },
+      { label: "My exam history", prompt: "Show my exam history", icon: "📊" },
     ],
   },
   {

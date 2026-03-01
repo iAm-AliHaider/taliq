@@ -75,8 +75,10 @@ from tools import (
     # Performance / Training / Grievance / Notifications
     show_my_performance, create_performance_review, show_my_goals, set_new_goal, update_goal,
     show_available_trainings, enroll_in_training, show_my_trainings, show_training_calendar, show_course_materials,
+    list_available_exams, start_exam, submit_exam_answers, show_my_exam_history, show_course_content,
     file_grievance, show_my_grievances, show_notifications,
     show_training_calendar, show_course_materials,
+    list_available_exams, start_exam, submit_exam_answers, show_my_exam_history, show_course_content,
     # Manager
     show_pending_approvals, approve_leave, show_team_overview, show_department_stats,
     show_leave_calendar, show_dashboard, show_leave_history,
@@ -258,6 +260,15 @@ Team Administration:
 - "All exits" -> show_all_exits
 
 When a manager logs in, proactively mention pending items count.
+
+EXAMS & ASSESSMENTS:
+- "Show available exams" -> list_available_exams
+- "Take the safety exam" -> start_exam (needs exam_id)
+- "Show my exam history" -> show_my_exam_history
+- "Show course materials for course 1" -> show_course_content (needs course_id)
+- "Show training calendar" -> show_training_calendar
+When a user submits exam answers via the form, use submit_exam_answers with the attempt_id and answers JSON.
+Exams can be for training verification OR interview assessments.
 """
 
 
@@ -284,6 +295,7 @@ ALL_TOOLS = [
     show_my_performance, create_performance_review, show_my_goals, set_new_goal, update_goal,
     # Training
     show_available_trainings, enroll_in_training, show_my_trainings, show_training_calendar, show_course_materials,
+    list_available_exams, start_exam, submit_exam_answers, show_my_exam_history, show_course_content,
     # Grievance
     file_grievance, show_my_grievances,
     # Notifications
@@ -429,6 +441,9 @@ async def _handle_data(data: rtc.DataPacket):
             "clock_in": lambda: f"Clock me in at {msg.get('location', 'office')}",
             "clock_out": lambda: "Clock me out",
             "calculate_eos": lambda: f"Calculate end of service for {msg.get('reason', 'termination')}",
+            "submit_exam": lambda: f"Submit exam answers for attempt {msg.get('attempt_id', '')} with answers: {json.dumps(msg.get('answers', {}))}",
+            "retry_exam": lambda: f"Start exam {msg.get('exam_id', '')} again",
+            "enroll_training": lambda: f"Enroll in training course {msg.get('courseId', '')}",
         }
         handler = action_map.get(action)
         text = handler() if handler else f"User action: {action}"

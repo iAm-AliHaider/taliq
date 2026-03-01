@@ -141,6 +141,102 @@ async def show_course_materials(context: RunContext, course_id: int):
     }, "main_card")
     return f"Showing materials for {course.get('title', 'course')}."
 
+
+
+# ---- EXAMS ----
+
+@function_tool()
+async def list_available_exams(context: RunContext):
+    """List available exams for the employee (training exams they can take)."""
+    emp_id = get_current_employee_id_from_context()
+    exams = db.get_exams()
+    active = [e for e in exams if e.get("is_active")]
+    await _send_ui("StatusBanner", {"message": f"{len(active)} exams available", "type": "info", "items": [{"label": f"{e['title']} ({e.get('question_count',0)} questions, pass: {e['passing_score']}%)", "value": f"ID: {e['id']}"} for e in active[:10]]}, "main_card")
+    return f"{len(active)} exams available. " + ", ".join(f"#{e['id']} {e['title']}" for e in active[:5])
+
+
+@function_tool()
+async def start_exam(context: RunContext, exam_id: int):
+    """Start taking an exam. Shows questions one by one with timer."""
+    emp_id = get_current_employee_id_from_context()
+    emp = db.get_employee(emp_id)
+    emp_name = emp.get("name", emp_id) if emp else emp_id
+    attempt = db.start_exam_attempt(exam_id, emp_id, "employee", emp_name)
+    if "error" in attempt:
+        await _send_ui("StatusBanner", {"message": attempt["error"], "type": "warning"}, "main_card")
+        return attempt["error"]
+    exam = db.get_exam_with_questions(exam_id, include_answers=False)
+    if not exam:
+        return "Exam not found."
+    await _send_ui("ExamCard", {
+        "examId": exam_id,
+        "examTitle": exam["title"],
+        "description": exam.get("description", ""),
+        "passingScore": exam["passing_score"],
+        "timeLimitMinutes": exam["time_limit_minutes"],
+        "questions": exam["questions"],
+        "attemptId": attempt["attempt_id"],
+    }, "main_card")
+    return f"Exam started: {exam['title']}. {len(exam['questions'])} questions, {exam['time_limit_minutes']} minutes. Good luck!"
+
+
+@function_tool()
+async def submit_exam_answers(context: RunContext, attempt_id: int, answers: str):
+    """Submit exam answers and get results. Answers format: JSON string mapping question_id to answer."""
+    import json
+    try:
+        answers_dict = json.loads(answers) if isinstance(answers, str) else answers
+    except:
+        return "Invalid answers format. Please provide JSON mapping question IDs to answers."
+    result = db.submit_exam(attempt_id, answers_dict)
+    if "error" in result:
+        return result["error"]
+    await _send_ui("ExamResultsCard", {
+        "score": result["score"],
+        "passed": result["passed"],
+        "passingScore": result["passing_score"],
+        "earnedPoints": result["earned_points"],
+        "totalPoints": result["total_points"],
+        "results": result["results"],
+    }, "main_card")
+    status = "Passed" if result["passed"] else "Not passed"
+    return f"Exam completed! Score: {result['score']}%. {status}. {result['earned_points']}/{result['total_points']} points."
+
+
+@function_tool()
+async def show_my_exam_history(context: RunContext):
+    """Show employee exam attempt history and scores."""
+    emp_id = get_current_employee_id_from_context()
+    attempts = db.get_exam_attempts(participant_id=emp_id)
+    if not attempts:
+        return "No exam attempts found."
+    summary = []
+    for a in attempts[:10]:
+        status = "Passed" if a.get("passed") else "Failed"
+        summary.append(f"{a.get('exam_title','Exam')}: {a.get('score',0)}% ({status})")
+    await _send_ui("StatusBanner", {"message": f"{len(attempts)} exam attempts", "type": "info", "items": [{"label": s, "value": ""} for s in summary]}, "main_card")
+    return f"{len(attempts)} exam attempts. " + "; ".join(summary[:5])
+
+
+@function_tool()
+async def show_course_content(context: RunContext, course_id: int):
+    """Show course materials, documents, and resources."""
+    materials = db.get_course_materials(course_id)
+    conn = db.get_db()
+    c = conn.cursor()
+    c.execute("SELECT title, syllabus, materials_url FROM training_courses WHERE id = %s", (course_id,))
+    course = db._fetchone(c)
+    conn.close()
+    if not course:
+        return "Course not found."
+    await _send_ui("CourseMaterialsCard", {
+        "courseTitle": course.get("title", ""),
+        "syllabus": course.get("syllabus", ""),
+        "materialsUrl": course.get("materials_url", ""),
+        "materials": [{"title": m["title"], "type": m["type"], "url": m.get("url", "")} for m in materials],
+    }, "main_card")
+    return f"Showing {len(materials)} materials for {course.get('title', 'course')}."
+
 # ---- GRIEVANCE ----
 
 @function_tool()

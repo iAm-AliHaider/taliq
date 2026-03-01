@@ -254,6 +254,62 @@ def init_db():
         status TEXT DEFAULT 'enrolled'
     )""")
 
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS course_materials (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER NOT NULL REFERENCES training_courses(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        type TEXT DEFAULT 'link',
+        url TEXT,
+        content TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_DATE::TEXT
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS course_exams (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER REFERENCES training_courses(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        passing_score INTEGER DEFAULT 70,
+        time_limit_minutes INTEGER DEFAULT 30,
+        max_attempts INTEGER DEFAULT 3,
+        shuffle_questions INTEGER DEFAULT 1,
+        is_active INTEGER DEFAULT 1,
+        exam_type TEXT DEFAULT 'training',
+        created_at TEXT DEFAULT CURRENT_DATE::TEXT
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS exam_questions (
+        id SERIAL PRIMARY KEY,
+        exam_id INTEGER NOT NULL REFERENCES course_exams(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        question_type TEXT DEFAULT 'mcq',
+        options JSONB DEFAULT '[]'::JSONB,
+        correct_answer TEXT NOT NULL,
+        explanation TEXT,
+        points INTEGER DEFAULT 1,
+        sort_order INTEGER DEFAULT 0
+    )""")
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS exam_attempts (
+        id SERIAL PRIMARY KEY,
+        exam_id INTEGER NOT NULL REFERENCES course_exams(id) ON DELETE CASCADE,
+        participant_id TEXT NOT NULL,
+        participant_type TEXT DEFAULT 'employee',
+        participant_name TEXT,
+        answers JSONB DEFAULT '{}'::JSONB,
+        score REAL,
+        passed INTEGER DEFAULT 0,
+        started_at TEXT DEFAULT NOW()::TEXT,
+        completed_at TEXT,
+        time_spent_seconds INTEGER DEFAULT 0
+    )""")
+
     c.execute("""
     CREATE TABLE IF NOT EXISTS grievances (
         id SERIAL PRIMARY KEY,
@@ -594,6 +650,42 @@ def init_db():
     c.execute("SELECT COUNT(*) FROM training_courses")
     if c.fetchone()[0] == 0:
         _seed_training_courses(c)
+
+    # Seed exam for Safety Compliance course
+    c.execute("SELECT COUNT(*) FROM course_exams")
+    if c.fetchone()[0] == 0:
+        c.execute("SELECT id FROM training_courses WHERE title = 'Safety Compliance' LIMIT 1")
+        safety_id_row = c.fetchone()
+        if safety_id_row:
+            safety_id = safety_id_row[0]
+            c.execute("""INSERT INTO course_exams (course_id, title, description, passing_score, time_limit_minutes, exam_type) 
+                VALUES (%s, 'Safety Compliance Certification', 'Verify your knowledge of workplace safety standards', 80, 20, 'training')
+                RETURNING id""", (safety_id,))
+            exam_id = c.fetchone()[0]
+            import json
+            questions = [
+                ("What is the first step when discovering a fire in the workplace?", 
+                 json.dumps(["Fight the fire", "Alert others and activate the alarm", "Open windows", "Continue working"]),
+                 "Alert others and activate the alarm", "Always prioritize alerting others first before attempting anything else."),
+                ("How often should fire extinguishers be inspected?",
+                 json.dumps(["Monthly", "Quarterly", "Yearly", "Every 5 years"]),
+                 "Monthly", "Fire extinguishers must be visually inspected monthly per OSHA standards."),
+                ("What does PPE stand for?",
+                 json.dumps(["Personal Protection Equipment", "Personal Protective Equipment", "Private Protective Equipment", "Professional Protection Equipment"]),
+                 "Personal Protective Equipment", "PPE = Personal Protective Equipment."),
+                ("Which color indicates a fire exit sign?",
+                 json.dumps(["Red", "Blue", "Green", "Yellow"]),
+                 "Green", "Green signs indicate safe exit routes per international standards."),
+                ("What should you do if you witness a workplace injury?",
+                 json.dumps(["Ignore it", "Report to supervisor immediately", "Post on social media", "Wait until end of shift"]),
+                 "Report to supervisor immediately", "All workplace injuries must be reported immediately."),
+            ]
+            for i, (q, opts, ans, expl) in enumerate(questions):
+                c.execute("""INSERT INTO exam_questions (exam_id, question, options, correct_answer, explanation, sort_order)
+                    VALUES (%s, %s, %s::JSONB, %s, %s, %s)""", (exam_id, q, opts, ans, expl, i))
+        conn.commit()
+
+
         conn.commit()
 
 
@@ -2095,6 +2187,188 @@ def get_training_stats(emp_id):
     conn.close()
     return {"total_enrolled": total, "completed": completed, "mandatory_total": mandatory_total, "mandatory_completed": mandatory_done, "compliance": round((mandatory_done / mandatory_total * 100) if mandatory_total > 0 else 100)}
 
+
+
+
+# ── Course Materials CRUD ───────────────────────────────
+
+def get_course_materials(course_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM course_materials WHERE course_id = %s ORDER BY sort_order, id", (course_id,))
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+def add_course_material(course_id, title, mat_type="link", url=None, content=None):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("INSERT INTO course_materials (course_id, title, type, url, content) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+              (course_id, title, mat_type, url, content))
+    mid = c.fetchone()[0]
+    conn.commit()
+    c.execute("SELECT * FROM course_materials WHERE id = %s", (mid,))
+    row = _fetchone(c)
+    conn.close()
+    return row
+
+def delete_course_material(material_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DELETE FROM course_materials WHERE id = %s", (material_id,))
+    conn.commit()
+    conn.close()
+
+
+# ── Exam CRUD ───────────────────────────────────────────
+
+def get_exams(course_id=None, exam_type=None):
+    conn = get_db()
+    c = conn.cursor()
+    if course_id:
+        c.execute("SELECT ce.*, tc.title as course_title, (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ce.id) as question_count, (SELECT COUNT(*) FROM exam_attempts ea WHERE ea.exam_id = ce.id) as attempt_count FROM course_exams ce LEFT JOIN training_courses tc ON ce.course_id = tc.id WHERE ce.course_id = %s ORDER BY ce.id", (course_id,))
+    elif exam_type:
+        c.execute("SELECT ce.*, tc.title as course_title, (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ce.id) as question_count, (SELECT COUNT(*) FROM exam_attempts ea WHERE ea.exam_id = ce.id) as attempt_count FROM course_exams ce LEFT JOIN training_courses tc ON ce.course_id = tc.id WHERE ce.exam_type = %s ORDER BY ce.id", (exam_type,))
+    else:
+        c.execute("SELECT ce.*, tc.title as course_title, (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ce.id) as question_count, (SELECT COUNT(*) FROM exam_attempts ea WHERE ea.exam_id = ce.id) as attempt_count FROM course_exams ce LEFT JOIN training_courses tc ON ce.course_id = tc.id ORDER BY ce.id")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+def create_exam(course_id, title, description="", passing_score=70, time_limit=30, max_attempts=3, exam_type="training"):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""INSERT INTO course_exams (course_id, title, description, passing_score, time_limit_minutes, max_attempts, exam_type)
+        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+        (course_id, title, description, passing_score, time_limit, max_attempts, exam_type))
+    eid = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"id": eid, "title": title}
+
+def get_exam_with_questions(exam_id, include_answers=False):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT * FROM course_exams WHERE id = %s", (exam_id,))
+    exam = _fetchone(c)
+    if not exam:
+        conn.close()
+        return None
+    c.execute("SELECT * FROM exam_questions WHERE exam_id = %s ORDER BY sort_order, id", (exam_id,))
+    questions = _fetchall(c)
+    conn.close()
+    if not include_answers:
+        for q in questions:
+            q.pop("correct_answer", None)
+            q.pop("explanation", None)
+    exam["questions"] = questions
+    return exam
+
+def add_exam_question(exam_id, question, options, correct_answer, explanation="", question_type="mcq", points=1):
+    import json
+    conn = get_db()
+    c = conn.cursor()
+    opts_json = json.dumps(options) if isinstance(options, list) else options
+    c.execute("""INSERT INTO exam_questions (exam_id, question, question_type, options, correct_answer, explanation, points)
+        VALUES (%s,%s,%s,%s::JSONB,%s,%s,%s) RETURNING id""",
+        (exam_id, question, question_type, opts_json, correct_answer, explanation, points))
+    qid = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"id": qid}
+
+def delete_exam_question(question_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DELETE FROM exam_questions WHERE id = %s", (question_id,))
+    conn.commit()
+    conn.close()
+
+def update_exam_question(question_id, question=None, options=None, correct_answer=None, explanation=None):
+    import json
+    conn = get_db()
+    c = conn.cursor()
+    if question: c.execute("UPDATE exam_questions SET question = %s WHERE id = %s", (question, question_id))
+    if options: c.execute("UPDATE exam_questions SET options = %s::JSONB WHERE id = %s", (json.dumps(options), question_id))
+    if correct_answer: c.execute("UPDATE exam_questions SET correct_answer = %s WHERE id = %s", (correct_answer, question_id))
+    if explanation is not None: c.execute("UPDATE exam_questions SET explanation = %s WHERE id = %s", (explanation, question_id))
+    conn.commit()
+    conn.close()
+
+def start_exam_attempt(exam_id, participant_id, participant_type="employee", participant_name=""):
+    conn = get_db()
+    c = conn.cursor()
+    # Check max attempts
+    c.execute("SELECT max_attempts FROM course_exams WHERE id = %s", (exam_id,))
+    exam = c.fetchone()
+    if not exam:
+        conn.close()
+        return {"error": "Exam not found"}
+    c.execute("SELECT COUNT(*) FROM exam_attempts WHERE exam_id = %s AND participant_id = %s", (exam_id, participant_id))
+    attempts = c.fetchone()[0]
+    if exam[0] > 0 and attempts >= exam[0]:
+        conn.close()
+        return {"error": f"Maximum attempts ({exam[0]}) reached"}
+    c.execute("""INSERT INTO exam_attempts (exam_id, participant_id, participant_type, participant_name)
+        VALUES (%s,%s,%s,%s) RETURNING id""", (exam_id, participant_id, participant_type, participant_name))
+    aid = c.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"attempt_id": aid, "attempt_number": attempts + 1}
+
+def submit_exam(attempt_id, answers):
+    import json
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT ea.*, ce.passing_score FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id WHERE ea.id = %s", (attempt_id,))
+    attempt = _fetchone(c)
+    if not attempt:
+        conn.close()
+        return {"error": "Attempt not found"}
+    # Get questions with answers
+    c.execute("SELECT * FROM exam_questions WHERE exam_id = %s ORDER BY sort_order, id", (attempt["exam_id"],))
+    questions = _fetchall(c)
+    # Grade
+    total_points = sum(q["points"] for q in questions)
+    earned = 0
+    results = []
+    for q in questions:
+        user_answer = answers.get(str(q["id"]), "")
+        correct = user_answer.strip().lower() == q["correct_answer"].strip().lower()
+        if correct:
+            earned += q["points"]
+        results.append({"question_id": q["id"], "question": q["question"], "user_answer": user_answer, "correct_answer": q["correct_answer"], "correct": correct, "explanation": q.get("explanation", ""), "points": q["points"]})
+    score = round((earned / total_points * 100) if total_points > 0 else 0, 1)
+    passed = 1 if score >= attempt["passing_score"] else 0
+    c.execute("UPDATE exam_attempts SET answers = %s::JSONB, score = %s, passed = %s, completed_at = NOW()::TEXT WHERE id = %s",
+              (json.dumps(answers), score, passed, attempt_id))
+    conn.commit()
+    conn.close()
+    return {"score": score, "passed": bool(passed), "passing_score": attempt["passing_score"], "earned_points": earned, "total_points": total_points, "results": results}
+
+def get_exam_attempts(exam_id=None, participant_id=None):
+    conn = get_db()
+    c = conn.cursor()
+    if exam_id and participant_id:
+        c.execute("SELECT ea.*, ce.title as exam_title FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id WHERE ea.exam_id = %s AND ea.participant_id = %s ORDER BY ea.id DESC", (exam_id, participant_id))
+    elif exam_id:
+        c.execute("SELECT ea.*, ce.title as exam_title FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id WHERE ea.exam_id = %s ORDER BY ea.id DESC", (exam_id,))
+    elif participant_id:
+        c.execute("SELECT ea.*, ce.title as exam_title FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id WHERE ea.participant_id = %s ORDER BY ea.id DESC", (participant_id,))
+    else:
+        c.execute("SELECT ea.*, ce.title as exam_title FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id ORDER BY ea.id DESC LIMIT 50")
+    rows = _fetchall(c)
+    conn.close()
+    return rows
+
+def delete_exam(exam_id):
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("DELETE FROM exam_attempts WHERE exam_id = %s", (exam_id,))
+    c.execute("DELETE FROM exam_questions WHERE exam_id = %s", (exam_id,))
+    c.execute("DELETE FROM course_exams WHERE id = %s", (exam_id,))
+    conn.commit()
+    conn.close()
 
 # ── Grievance CRUD ──────────────────────────────────────
 

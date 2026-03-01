@@ -163,6 +163,18 @@ export async function GET(request: NextRequest) {
     }
 
     
+    
+    if (section === "exams") {
+      const exams = await sql`SELECT ce.*, tc.title as course_title,
+        (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ce.id) as question_count,
+        (SELECT COUNT(*) FROM exam_attempts ea WHERE ea.exam_id = ce.id) as attempt_count,
+        (SELECT ROUND(AVG(ea.score)::NUMERIC, 1) FROM exam_attempts ea WHERE ea.exam_id = ce.id AND ea.score IS NOT NULL) as avg_score
+        FROM course_exams ce LEFT JOIN training_courses tc ON ce.course_id = tc.id ORDER BY ce.id`;
+      const questions = await sql`SELECT eq.*, ce.title as exam_title FROM exam_questions eq JOIN course_exams ce ON eq.exam_id = ce.id ORDER BY eq.exam_id, eq.sort_order`;
+      const attempts = await sql`SELECT ea.*, ce.title as exam_title FROM exam_attempts ea JOIN course_exams ce ON ea.exam_id = ce.id ORDER BY ea.id DESC LIMIT 50`;
+      return NextResponse.json({ exams, questions, attempts });
+    }
+
     if (section === "training") {
       const courses = await sql`SELECT tc.*, 
         (SELECT COUNT(*) FROM employee_trainings et WHERE et.course_id = tc.id) as enrolled_count,
@@ -173,7 +185,9 @@ export async function GET(request: NextRequest) {
         JOIN employees e ON et.employee_id = e.id 
         JOIN training_courses tc ON et.course_id = tc.id 
         ORDER BY et.enrollment_date DESC`;
-      return NextResponse.json({ courses, enrollments });
+      const materials = await sql`SELECT cm.*, tc.title as course_title FROM course_materials cm JOIN training_courses tc ON cm.course_id = tc.id ORDER BY cm.course_id, cm.sort_order`;
+      const exams_brief = await sql`SELECT ce.id, ce.course_id, ce.title, ce.passing_score, ce.is_active, (SELECT COUNT(*) FROM exam_questions eq WHERE eq.exam_id = ce.id) as question_count FROM course_exams ce ORDER BY ce.id`;
+      return NextResponse.json({ courses, enrollments, materials, exams: exams_brief });
     }
 
     if (section === "workflows") {
@@ -442,6 +456,53 @@ export async function POST(request: NextRequest) {
     }
 
     
+    
+    if (action === "create_exam") {
+      const { course_id, title, description, passing_score, time_limit_minutes, max_attempts, exam_type } = body;
+      const [row] = await sql`INSERT INTO course_exams (course_id, title, description, passing_score, time_limit_minutes, max_attempts, exam_type)
+        VALUES (\${course_id || null}, \${title}, \${description || ''}, \${passing_score || 70}, \${time_limit_minutes || 30}, \${max_attempts || 3}, \${exam_type || 'training'}) RETURNING id`;
+      return NextResponse.json({ ok: true, id: row.id });
+    }
+
+    if (action === "delete_exam") {
+      const { id } = body;
+      await sql`DELETE FROM exam_attempts WHERE exam_id = \${id}`;
+      await sql`DELETE FROM exam_questions WHERE exam_id = \${id}`;
+      await sql`DELETE FROM course_exams WHERE id = \${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "add_exam_question") {
+      const { exam_id, question, options, correct_answer, explanation, question_type } = body;
+      await sql`INSERT INTO exam_questions (exam_id, question, question_type, options, correct_answer, explanation) 
+        VALUES (\${exam_id}, \${question}, \${question_type || 'mcq'}, \${JSON.stringify(options || [])}::JSONB, \${correct_answer}, \${explanation || ''})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_exam_question") {
+      const { id } = body;
+      await sql`DELETE FROM exam_questions WHERE id = \${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "toggle_exam") {
+      const { id } = body;
+      await sql`UPDATE course_exams SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = \${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "add_course_material") {
+      const { course_id, title, type, url, content } = body;
+      await sql`INSERT INTO course_materials (course_id, title, type, url, content) VALUES (\${course_id}, \${title}, \${type || 'link'}, \${url || null}, \${content || null})`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_course_material") {
+      const { id } = body;
+      await sql`DELETE FROM course_materials WHERE id = \${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "create_course") {
       const { title, description, provider, duration_hours, category, mandatory, start_date, end_date, schedule, location, max_seats, materials_url, syllabus } = body;
       await sql`INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory, status, start_date, end_date, schedule, location, max_seats, materials_url, syllabus) 
