@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import SettingsPanel from "./settings";
 import TemplatesPanel from "./templates";
+import WorkflowBuilder from "./workflow-builder";
 import dynamic from "next/dynamic";
 const RechartsBarChart = dynamic(() => import("recharts").then(m => {
   const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } = m;
@@ -177,6 +178,7 @@ export default function AdminPage() {
   const [workflowData, setWorkflowData] = useState<any>(null);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateFence, setShowCreateFence] = useState(false);
+  const [showWorkflowBuilder, setShowWorkflowBuilder] = useState(false);
   const [newJob, setNewJob] = useState({ title: "", department: "", description: "", requirements: "", salary_range: "", location: "Riyadh", employment_type: "full_time" });
   const [newFence, setNewFence] = useState({ name: "", latitude: "", longitude: "", radius_meters: "200", address: "", description: "" });
   // Create employee
@@ -978,8 +980,25 @@ export default function AdminPage() {
         )}
         {tab === "Workflows" && (
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-gray-900 tracking-tight">Approval Workflows</h2>
-            <p className="text-xs text-gray-500">Multi-level approval chains for leaves, expenses, loans, and exit requests.</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 tracking-tight">Approval Workflows</h2>
+                <p className="text-xs text-gray-500 mt-1">Multi-level approval chains for leaves, expenses, loans, and exit requests.</p>
+              </div>
+              <button onClick={() => setShowWorkflowBuilder(!showWorkflowBuilder)} className="px-4 py-2 rounded-xl bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 shadow-sm shadow-indigo-200">
+                {showWorkflowBuilder ? "Cancel" : "+ New Workflow"}
+              </button>
+            </div>
+            {showWorkflowBuilder && (
+              <WorkflowBuilder
+                onCancel={() => setShowWorkflowBuilder(false)}
+                onSave={async (wf) => {
+                  await fetch("/api/admin?action=create_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(wf) });
+                  setShowWorkflowBuilder(false);
+                  adminFetch("section=workflows").then(d => d && setWorkflowData(d));
+                }}
+              />
+            )}
             {/* Workflow Definitions */}
             <div className="space-y-3">
               {(workflowData?.workflows || []).map((w: any) => {
@@ -992,6 +1011,8 @@ export default function AdminPage() {
                         <p className="text-[10px] text-gray-400">Entity: {w.entity_type?.replace("_", " ")} &middot; {steps.length} steps</p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold border ${w.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>{w.is_active ? "Active" : "Disabled"}</span>
+                      <button onClick={async () => { await fetch("/api/admin?action=toggle_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id, is_active: !w.is_active }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d)); }} className="text-[10px] text-indigo-500 hover:underline">{w.is_active ? "Disable" : "Enable"}</button>
+                      <button onClick={async () => { if (!confirm("Delete this workflow?")) return; await fetch("/api/admin?action=delete_workflow", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: w.id }) }); adminFetch("section=workflows").then(d => d && setWorkflowData(d)); }} className="text-[10px] text-red-400 hover:underline">Delete</button>
                     </div>
                     <div className="px-5 py-3 flex items-center gap-1 overflow-x-auto">
                       {steps.map((s: any, i: number) => (

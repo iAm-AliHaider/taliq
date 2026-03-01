@@ -280,6 +280,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+
+    if (action === "create_workflow") {
+      const { name, entity_type, description, steps } = body;
+      await sql`INSERT INTO approval_workflows (name, entity_type, description, steps)
+        VALUES (${name}, ${entity_type}, ${description || ''}, ${JSON.stringify(steps)}::jsonb)`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "toggle_workflow") {
+      const { id, is_active } = body;
+      await sql`UPDATE approval_workflows SET is_active = ${is_active} WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "delete_workflow") {
+      const { id } = body;
+      await sql`DELETE FROM approval_workflows WHERE id = ${id}`;
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "delete_geofence") {
       const { id } = body;
       await sql`DELETE FROM geofences WHERE id = ${id}`;
