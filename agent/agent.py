@@ -1,3 +1,6 @@
+from pixel_office import PixelOffice as _PixelOffice
+_po = _PixelOffice("taliq")
+
 """Taliq - Voice-First HR Agent with real CRUD, interactive forms, and self-service.
 
 Modular architecture:
@@ -470,6 +473,8 @@ async def entrypoint(ctx: JobContext):
         logger.error(f"Failed to connect: {e}")
         return
     set_room_ref(ctx.room)
+    _po.busy("Taliq HR - active session")
+    ctx.room.on("disconnected", lambda *_: _po.online("Waiting for calls..."))
     logger.info(f"Connected to room: {ctx.room.name}, metadata: {ctx.room.metadata}")
 
     employee_id = DEFAULT_EMPLOYEE_ID
@@ -615,9 +620,13 @@ _admin_thread = threading.Thread(target=_start_admin, daemon=True)
 _admin_thread.start()
 
 if __name__ == "__main__":
+    def _prewarm(proc):
+        _po.online("Taliq HR Agent - ready")
+
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=_prewarm,
             agent_name="taliq",
             worker_type=WorkerType.ROOM,
             job_executor_type=JobExecutorType.THREAD,
