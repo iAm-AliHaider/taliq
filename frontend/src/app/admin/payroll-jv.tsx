@@ -337,8 +337,8 @@ export default function PayrollJV() {
             </div>
           )}
         </div>
-        {selectedRun && <PayrollExtras runId={selectedRun.id} runRef={selectedRun.ref} />}
       </div>
+      {selectedRun && <PayrollExtras runId={selectedRun.id} runRef={selectedRun.ref} />}
 
       {/* ── New Run Modal ──────────────────────────────────────────────────────── */}
       {showRunForm && (
