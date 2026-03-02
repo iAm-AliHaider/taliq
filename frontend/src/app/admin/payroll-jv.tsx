@@ -367,7 +367,7 @@ export default function PayrollJV() {
               </div>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4 text-xs text-amber-700">
-              This will calculate payroll for all active employees using current salary data and GOSI rates (9% employee, 11.75% employer).
+              This will calculate payroll for all active employees using current salary data and GOSI rates (9.75% employee, 11.75% employer for Saudis; 0%/2% for non-Saudis).
             </div>
             <div className="flex justify-end gap-3 mt-5">
               <button onClick={() => setShowRunForm(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
