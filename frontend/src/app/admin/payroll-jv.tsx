@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import PayrollExtras from "./payroll-extras";
 
 type PayrollRun = {
   id: number; ref: string; period_label: string; period_month: number; period_year: number;
@@ -79,6 +80,17 @@ export default function PayrollJV() {
       body: JSON.stringify({ action:"approve_payroll", run_id }),
     });
     flash("Payroll run approved"); loadRuns();
+  }
+
+  async function postRun(run_id: number) {
+    const r = await fetch("/api/payroll", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "post_payroll", run_id }),
+    });
+    const data = await r.json();
+    if (data.error) flash(data.error, "err");
+    else flash("Payroll posted + loans decremented + EOS provisions calculated");
+    loadRuns();
   }
 
   async function selectRun(run: PayrollRun) {
@@ -180,6 +192,12 @@ export default function PayrollJV() {
                   <button onClick={e => { e.stopPropagation(); approveRun(run.id); }}
                     className="mt-2 w-full py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium hover:bg-blue-100">
                     Approve Run
+                  </button>
+                )}
+                {run.status === "approved" && (
+                  <button onClick={e => { e.stopPropagation(); postRun(run.id); }}
+                    className="mt-2 w-full py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700">
+                    Post to ERP
                   </button>
                 )}
                 {run.posted_to_erp && (
@@ -319,6 +337,7 @@ export default function PayrollJV() {
             </div>
           )}
         </div>
+        {selectedRun && <PayrollExtras runId={selectedRun.id} runRef={selectedRun.ref} />}
       </div>
 
       {/* ── New Run Modal ──────────────────────────────────────────────────────── */}

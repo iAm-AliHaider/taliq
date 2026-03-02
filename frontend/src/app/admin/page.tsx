@@ -6,6 +6,10 @@ import SettingsPanel from "./settings";
 import TemplatesPanel from "./templates";
 import PaycodesGL from "./paycodes-gl";
 import PayrollJV from "./payroll-jv";
+import ProbationAlerts from "./probation-alerts";
+import EOSProvisions from "./eos-provisions";
+import SalaryHistory from "./salary-history";
+import OrgChart from "./org-chart";
 import WorkflowBuilder from "./workflow-builder";
 import InterviewBuilder from "./interview-builder";
 import dynamic from "next/dynamic";
@@ -95,7 +99,7 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Exams", "Templates", "Audit Log", "Paycodes & GL", "Payroll JV"];
+const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Exams", "Templates", "Audit Log", "Paycodes & GL", "Payroll JV", "Org Chart", "Salary History", "EOS Provisions", "Probation"];
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -1680,6 +1684,26 @@ export default function AdminPage() {
             <h2 className="text-xl font-bold text-gray-900 tracking-tight">Letter Templates</h2>
             <p className="text-xs text-gray-500">Customize the content, header, and footer of HR letters. Changes apply to all new letters generated.</p>
             <TemplatesPanel />
+          </div>
+        )}
+        {tab === "Org Chart" && (
+          <div className="p-1">
+            <OrgChart />
+          </div>
+        )}
+        {tab === "Salary History" && (
+          <div className="p-1">
+            <SalaryHistory />
+          </div>
+        )}
+        {tab === "EOS Provisions" && (
+          <div className="p-1">
+            <EOSProvisions />
+          </div>
+        )}
+        {tab === "Probation" && (
+          <div className="p-1">
+            <ProbationAlerts />
           </div>
         )}
         {tab === "Paycodes & GL" && (
