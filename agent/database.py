@@ -662,7 +662,6 @@ def init_db():
                 VALUES (%s, 'Safety Compliance Certification', 'Verify your knowledge of workplace safety standards', 80, 20, 'training')
                 RETURNING id""", (safety_id,))
             exam_id = c.fetchone()[0]
-            import json
             questions = [
                 ("What is the first step when discovering a fire in the workplace?", 
                  json.dumps(["Fight the fire", "Alert others and activate the alarm", "Open windows", "Continue working"]),
