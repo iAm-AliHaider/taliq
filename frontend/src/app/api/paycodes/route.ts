@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
       // Fetch all active employees
       const employees = await sql`
         SELECT id, name, department, basic_salary, housing_allowance, transport_allowance
-        FROM employees WHERE status = 'active' OR status IS NULL
+        FROM employees
       `;
 
       // Fetch paycodes
