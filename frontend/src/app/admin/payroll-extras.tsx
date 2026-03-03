@@ -1,4 +1,5 @@
 "use client";
+import jsPDF from "jspdf";
 import { useState } from "react";
 
 function fmt(n: number) { return (n || 0).toLocaleString("en-SA", { minimumFractionDigits: 2 }); }
@@ -63,6 +64,95 @@ export default function PayrollExtras({ runId, runRef }: { runId: number; runRef
     low: "bg-blue-50 text-blue-700 border-blue-200",
   };
 
+
+  function downloadPayslipPDF(ps: Payslip) {
+    const doc = new jsPDF();
+    const w = doc.internal.pageSize.getWidth();
+    let y = 20;
+    
+    // Header
+    doc.setFillColor(16, 185, 129); // emerald-500
+    doc.rect(0, 0, w, 35, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text("PAYSLIP", 15, 18);
+    doc.setFontSize(10);
+    doc.text(`${runRef} | Generated ${new Date().toISOString().slice(0,10)}`, 15, 28);
+    
+    y = 45;
+    doc.setTextColor(30, 41, 59); // slate-800
+    
+    // Employee info
+    doc.setFontSize(14);
+    doc.text(ps.employee_name, 15, y); y += 7;
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${ps.employee_id} | ${ps.department}`, 15, y);
+    if (ps.iban) {
+      y += 5;
+      doc.text(`Bank: ${ps.bank_name || "N/A"} | IBAN: ${ps.iban}`, 15, y);
+    }
+    y += 12;
+    
+    // Table header helper
+    function tableHeader(title: string, startY: number) {
+      doc.setFillColor(241, 245, 249); // slate-100
+      doc.rect(15, startY - 4, w - 30, 7, "F");
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(title.toUpperCase(), 17, startY);
+      doc.text("AMOUNT (SAR)", w - 50, startY);
+      return startY + 8;
+    }
+    
+    function tableRow(name: string, amount: number, startY: number, bold = false) {
+      doc.setFontSize(9);
+      doc.setTextColor(bold ? 16 : 71, bold ? 185 : 85, bold ? 129 : 105);
+      if (bold) doc.setFont("helvetica", "bold");
+      else doc.setFont("helvetica", "normal");
+      doc.text(name, 17, startY);
+      doc.text(fmt(amount), w - 50, startY);
+      return startY + 6;
+    }
+    
+    // Earnings
+    y = tableHeader("Earnings", y);
+    for (const e of ps.earnings) { y = tableRow(e.name, e.amount, y); }
+    y = tableRow("Total Earnings", ps.total_earnings, y, true);
+    y += 6;
+    
+    // Deductions
+    y = tableHeader("Deductions", y);
+    for (const d of ps.deductions) { y = tableRow(d.name, d.amount, y); }
+    y = tableRow("Total Deductions", ps.total_deductions, y, true);
+    y += 6;
+    
+    // Employer contributions
+    if (ps.employer_contributions.length > 0) {
+      y = tableHeader("Employer Contributions", y);
+      for (const c of ps.employer_contributions) { y = tableRow(c.name, c.amount, y); }
+      y += 6;
+    }
+    
+    // Net pay box
+    doc.setFillColor(16, 185, 129);
+    doc.rect(15, y, w - 30, 14, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("NET PAY", 20, y + 9);
+    doc.text(`SAR ${fmt(ps.net_pay)}`, w - 55, y + 9);
+    
+    // Footer
+    y += 25;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text("This is a computer-generated document. | Taliq HR Platform", 15, y);
+    
+    doc.save(`payslip-${ps.employee_id}-${runRef}.pdf`);
+  }
+
   return (
     <div className="mt-4 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="flex gap-1 p-2 bg-gray-50 border-b overflow-x-auto">
@@ -92,6 +182,7 @@ export default function PayrollExtras({ runId, runRef }: { runId: number; runRef
                     <div className="text-xs text-gray-500">Net Pay</div>
                     <div className="font-bold text-emerald-700 text-lg">SAR {fmt(ps.net_pay)}</div>
                   </div>
+                  <button onClick={() => downloadPayslipPDF(ps)} className="mt-1 px-3 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 font-medium hover:bg-emerald-100" title="Download PDF">PDF</button>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div>
