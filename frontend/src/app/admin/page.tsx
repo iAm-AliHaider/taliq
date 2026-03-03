@@ -99,7 +99,43 @@ interface Announcement { id: number; title: string; content: string; author: str
 interface Grievance { ref: string; employeeId: string; employeeName: string; department: string; category: string; subject: string; description: string; severity: string; status: string; assignedTo: string; resolution: string; submittedAt: string; }
 interface Overview { totalEmployees: number; departments: { name: string; count: number }[]; pendingLeaves: number; activeLoans: number; pendingDocuments: number; announcements: number; openGrievances: number; pendingTravel: number; }
 
-const TABS = ["Overview", "Employees", "Leave Requests", "Loans", "Documents", "Grievances", "Announcements", "Settings", "Letters", "Contracts", "Assets", "Shifts", "Iqama/Visa", "Exits", "Reports", "Recruitment", "Interviews", "Geofencing", "Workflows", "Training", "Exams", "Templates", "Audit Log", "Paycodes & GL", "Payroll JV", "Org Chart", "Salary History", "EOS Provisions", "Probation"];
+const TAB_GROUPS: Record<string, string[]> = {
+  "Core":       ["Overview", "Employees", "Reports", "Org Chart"],
+  "HR Ops":     ["Leave Requests", "Loans", "Documents", "Grievances", "Announcements"],
+  "People":     ["Training", "Exams", "Interviews", "Recruitment", "Probation"],
+  "Payroll":    ["Paycodes & GL", "Payroll JV", "Salary History", "EOS Provisions"],
+  "Compliance": ["Contracts", "Letters", "Iqama/Visa", "Exits", "Geofencing", "Workflows"],
+  "Admin":      ["Assets", "Shifts", "Templates", "Audit Log", "Settings"],
+};
+const TABS = Object.values(TAB_GROUPS).flat();
+
+
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-200 rounded-lg ${className}`} />;
+}
+function SkeletonCard() {
+  return (
+    <div className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm space-y-2">
+      <Skeleton className="h-4 w-1/2" />
+      <Skeleton className="h-8 w-3/4" />
+      <Skeleton className="h-3 w-1/3" />
+    </div>
+  );
+}
+function SkeletonTable({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-2 p-4">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex gap-3">
+          <Skeleton className="h-4 w-8" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function StatCard({ label, value, color, sub }: { label: string; value: number | string; color: string; sub?: string }) {
   return (
@@ -687,7 +723,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-1">
                       <button onClick={async () => { await fetch("/api/admin?action=toggle_announce_login", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, value: !a.announce_on_login }) }); loadData(); }} className={`px-2 py-0.5 rounded text-[9px] font-semibold border transition-all ${a.announce_on_login ? "bg-indigo-50 text-indigo-600 border-indigo-200" : "bg-gray-50 text-gray-400 border-gray-200 hover:border-indigo-200"}`}>{a.announce_on_login ? "Login: ON" : "Login: OFF"}</button>
                       <button onClick={async () => { await fetch("/api/admin?action=toggle_announcement_active", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: a.id, value: a.is_active === false }) }); loadData(); }} className={`px-2 py-0.5 rounded text-[9px] font-semibold border ${a.is_active === false ? "bg-gray-50 text-gray-400 border-gray-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}`}>{a.is_active === false ? "Inactive" : "Active"}</button>
-                      <button onClick={() => handleDeleteAnnouncement(a.id)} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
+                      <button onClick={() => { if(!window.confirm('Delete this announcement?')) return; handleDeleteAnnouncement(a.id); }} className="text-[10px] text-red-400 hover:text-red-600">Delete</button>
                     </div>
                   </div>
                 </div>

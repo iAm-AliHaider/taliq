@@ -166,3 +166,14 @@ from tools.approvals import (
     view_approval_chain,
     show_approval_workflows,
 )
+
+from tools.payroll import (
+    show_payroll_runs,
+    show_my_payslip,
+    show_journal_voucher,
+    list_gl_accounts,
+    show_salary_history,
+    give_salary_raise,
+    show_eos_balance,
+    show_all_eos_provisions,
+)

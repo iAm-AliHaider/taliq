@@ -92,11 +92,20 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-500/20 mb-4">
-              <span className="text-white text-2xl font-bold">ت</span>
+            {/* Logo */}
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-xl shadow-emerald-500/25 mb-5">
+              <span className="text-white text-4xl font-black" style={{fontFamily:"serif"}}>ط</span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">{t("auth.title", lang)}</h1>
-            <p className="text-sm text-gray-500 mt-1">{t("auth.subtitle", lang)}</p>
+            {/* Brand name */}
+            <h1 className="text-3xl font-black tracking-tight text-gray-900">Taliq</h1>
+            <p className="text-sm font-medium text-emerald-600 mt-0.5">طليق — نظام إدارة الموارد البشرية</p>
+            <p className="text-xs text-gray-400 mt-2">{t("auth.subtitle", lang)}</p>
+            {/* Feature pills */}
+            <div className="flex flex-wrap gap-1.5 justify-center mt-4">
+              {["Voice-First", "Saudi Labor Law", "GOSI Compliant", "WPS Ready"].map(f => (
+                <span key={f} className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-semibold">{f}</span>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">

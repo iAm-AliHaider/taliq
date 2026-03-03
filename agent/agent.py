@@ -54,6 +54,11 @@ except Exception as e:
 from edge_tts_plugin import EdgeTTS
 
 # Import all tools and core utilities from modular tools package
+from tools.payroll import (
+    show_payroll_runs, show_my_payslip, show_journal_voucher,
+    list_gl_accounts, show_salary_history, give_salary_raise,
+    show_eos_balance, show_all_eos_provisions,
+)
 from tools import (
     acknowledge_announcement,
     # Core
@@ -352,6 +357,14 @@ ALL_TOOLS = [
     clock_in_gps, clock_out_gps, list_office_locations, manage_geofence,
     # Multi-Level Approval Workflows
     view_pending_approvals, approve_request, reject_request, view_approval_chain, show_approval_workflows,
+    show_payroll_runs,
+    show_my_payslip,
+    show_journal_voucher,
+    list_gl_accounts,
+    show_salary_history,
+    give_salary_raise,
+    show_eos_balance,
+    show_all_eos_provisions,
 ]
 
 MANAGER_ONLY_TOOLS = {
