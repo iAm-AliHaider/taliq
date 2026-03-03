@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "announcements") {
-      const rows = await sql`SELECT a.*, COALESCE(a.announce_on_login, FALSE) as announce_on_login, COALESCE(a.is_active, TRUE) as is_active FROM announcements a ORDER BY a.created_at DESC`;
+      const rows = await sql`SELECT a.*, COALESCE(a.announce_on_login, FALSE) as announce_on_login, COALESCE(a.is_active, TRUE) as is_active FROM announcements a ORDER BY a.applied_at DESC`;
       return NextResponse.json(rows);
     }
 
@@ -154,12 +154,23 @@ export async function GET(request: NextRequest) {
 
 
     if (section === "recruitment") {
-      const jobs = await sql`SELECT jp.*, (SELECT COUNT(*) FROM applications WHERE job_id = jp.id) as app_count FROM job_postings jp ORDER BY created_at DESC`;
-      const apps = await sql`SELECT a.*, j.title as job_title, j.department as job_department FROM applications a LEFT JOIN job_postings j ON a.job_id = j.id ORDER BY a.created_at DESC`;
+      const jobs = await sql`SELECT jp.*, (SELECT COUNT(*) FROM job_applications WHERE job_id = jp.id) as app_count FROM job_postings jp ORDER BY created_at DESC`;
+      const apps = await sql`SELECT a.*, j.title as job_title, j.department as job_department FROM job_applications a LEFT JOIN job_postings j ON a.job_id = j.id ORDER BY a.created_at DESC`;
       const stats = await sql`SELECT COUNT(*) as total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_count FROM job_postings`;
       return NextResponse.json({ jobs, applications: apps, stats: stats[0] });
     }
 
+
+    if (section === "offer_letters") {
+      const offers = await sql`SELECT ol.*, ja.candidate_email, ja.candidate_phone FROM offer_letters ol LEFT JOIN job_applications ja ON ol.application_id = ja.id ORDER BY ol.created_at DESC`;
+      return NextResponse.json({ offers });
+    }
+
+    if (section === "onboarding") {
+      const checklists = await sql`SELECT * FROM onboarding_checklists ORDER BY created_at DESC`;
+      const tasks = await sql`SELECT * FROM onboarding_tasks ORDER BY checklist_id, sort_order`;
+      return NextResponse.json({ checklists, tasks });
+    }
     if (section === "geofences") {
       const fences = await sql`SELECT * FROM geofences ORDER BY name`;
       return NextResponse.json({ geofences: fences });
@@ -609,7 +620,79 @@ export async function POST(request: NextRequest) {
     }
 
 
-        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    
+    if (action === "apply_to_job") {
+      const { job_id, candidate_name, candidate_email, candidate_phone, source } = body;
+      const [{id}] = await sql`INSERT INTO job_applications (ref, job_id, candidate_name, candidate_email, candidate_phone, source) VALUES (${'`APP-`' + ' || LPAD(CAST((SELECT COALESCE(MAX(id),0)+1 FROM job_applications) AS TEXT), 3, `0`) '}, ${Number(job_id)}, ${candidate_name}, ${candidate_email}, ${candidate_phone}, ${source || 'direct'}) RETURNING id`;
+      await audit(body.actor_id || "system", "create", "application", String(id), `application: ${candidate_name}`);
+      return NextResponse.json({ ok: true, id });
+    }
+
+    if (action === "advance_application") {
+      const { id, stage } = body;
+      await sql`UPDATE job_applications SET stage = ${stage}, updated_at = NOW() WHERE id = ${Number(id)}`;
+      await audit(body.actor_id || "system", "advance", "application", String(id), `stage: ${stage}`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "reject_application") {
+      const { id, reason } = body;
+      await sql`UPDATE job_applications SET stage = 'rejected', status = 'closed', notes = ${reason || 'Rejected'}, updated_at = NOW() WHERE id = ${Number(id)}`;
+      await audit(body.actor_id || "system", "reject", "application", String(id), `rejected`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_offer") {
+      const { application_id, position, department, offered_salary, housing_allowance, transport_allowance, start_date, contract_type } = body;
+      const [app] = await sql`SELECT candidate_name FROM job_applications WHERE id = ${Number(application_id)}`;
+      const ref = 'OFR-2026-' + String(Date.now()).slice(-3);
+      await sql`INSERT INTO offer_letters (ref, application_id, candidate_name, position, department, offered_salary, housing_allowance, transport_allowance, start_date, contract_type, created_by)
+        VALUES (${ref}, ${Number(application_id)}, ${app?.candidate_name || body.candidate_name}, ${position}, ${department}, ${Number(offered_salary)}, ${Number(housing_allowance || 0)}, ${Number(transport_allowance || 0)}, ${start_date}, ${contract_type || 'permanent'}, ${body.actor_id || 'system'})`;
+      await sql`UPDATE job_applications SET stage = 'offer' WHERE id = ${Number(application_id)}`;
+      await audit(body.actor_id || "system", "create", "offer_letter", ref, `offer for ${app?.candidate_name}`);
+      return NextResponse.json({ ok: true, ref });
+    }
+
+    if (action === "send_offer") {
+      const { id } = body;
+      await sql`UPDATE offer_letters SET status = 'sent', sent_at = NOW() WHERE id = ${Number(id)}`;
+      await audit(body.actor_id || "system", "send", "offer_letter", String(id), `offer sent`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "accept_offer") {
+      const { id } = body;
+      await sql`UPDATE offer_letters SET status = 'accepted', accepted_at = NOW() WHERE id = ${Number(id)}`;
+      const [offer] = await sql`SELECT application_id, candidate_name, position, department, start_date FROM offer_letters WHERE id = ${Number(id)}`;
+      await sql`UPDATE job_applications SET stage = 'hired', status = 'closed' WHERE id = ${Number(offer?.application_id)}`;
+      await audit(body.actor_id || "system", "accept", "offer_letter", String(id), `offer accepted`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "reject_offer") {
+      const { id, reason } = body;
+      await sql`UPDATE offer_letters SET status = 'rejected', rejected_at = NOW(), rejection_reason = ${reason || ''} WHERE id = ${Number(id)}`;
+      await audit(body.actor_id || "system", "reject", "offer_letter", String(id), `offer rejected`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "complete_onboarding_task") {
+      const { task_id, completed_by } = body;
+      await sql`UPDATE onboarding_tasks SET status = 'completed', completed_at = NOW(), completed_by = ${completed_by || 'system'} WHERE id = ${Number(task_id)}`;
+      const [task] = await sql`SELECT checklist_id FROM onboarding_tasks WHERE id = ${Number(task_id)}`;
+      if (task) {
+        const [cnt] = await sql`SELECT COUNT(*) as c FROM onboarding_tasks WHERE checklist_id = ${task.checklist_id} AND status = 'completed'`;
+        await sql`UPDATE onboarding_checklists SET completed_count = ${Number(cnt?.c || 0)} WHERE id = ${task.checklist_id}`;
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "create_onboarding") {
+      const { application_id, candidate_name, position, department, start_date, hr_assignee } = body;
+      return NextResponse.json({ ok: true, message: "Use the onboarding template system" });
+    }
+
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

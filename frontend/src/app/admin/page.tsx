@@ -179,6 +179,347 @@ function SeverityBadge({ severity }: { severity: string }) {
   return <Badge text={severity} color={map[severity] || "gray"} />;
 }
 
+
+// ─── Recruitment Pipeline Panel ───────────────────────────────────────────────
+const STAGES = ["applied","screening","interview","offer","hired","rejected"] as const;
+type Stage = typeof STAGES[number];
+const STAGE_COLORS: Record<Stage, string> = {
+  applied:   "bg-slate-100 text-slate-700",
+  screening: "bg-blue-50 text-blue-700",
+  interview: "bg-amber-50 text-amber-700",
+  offer:     "bg-violet-50 text-violet-700",
+  hired:     "bg-emerald-50 text-emerald-700",
+  rejected:  "bg-red-50 text-red-600",
+};
+const STAGE_NEXT: Partial<Record<Stage, {label:string; next:Stage}>> = {
+  applied:   { label: "Screen", next: "screening" },
+  screening: { label: "Shortlist", next: "interview" },
+  interview: { label: "Offer", next: "offer" },
+  offer:     { label: "Hire", next: "hired" },
+};
+
+function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
+  data: any; offerData: any; onboardingData: any; onRefresh: () => void;
+}) {
+  const [subTab, setSubTab] = useState<"pipeline"|"jobs"|"offers"|"onboarding">("pipeline");
+  const [showCreateJob, setShowCreateJob] = useState(false);
+  const [showCreateOffer, setShowCreateOffer] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [newJob, setNewJob] = useState({ title:"", department:"", description:"", requirements:"", salary_range:"", location:"Riyadh", employment_type:"full_time" });
+  const [offerForm, setOfferForm] = useState({ application_id:"", position:"", department:"", offered_salary:"", housing_allowance:"", transport_allowance:"", start_date:"", contract_type:"permanent" });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const apps: any[] = data?.applications || [];
+  const jobs: any[] = data?.jobs || [];
+  const offers: any[] = offerData?.offers || [];
+  const checklists: any[] = onboardingData?.checklists || [];
+  const tasks: any[] = onboardingData?.tasks || [];
+
+  const stats = {
+    total: apps.length,
+    active: apps.filter((a:any)=>a.status==="active").length,
+    offers: apps.filter((a:any)=>a.stage==="offer").length,
+    hired: apps.filter((a:any)=>a.stage==="hired").length,
+  };
+
+  async function post(action: string, body: any) {
+    setSaving(true);
+    const r = await fetch(`/api/admin?action=${action}`, {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+    }).then(r=>r.json());
+    setSaving(false);
+    if (r.ok || r.id) { onRefresh(); return true; }
+    setMsg(r.error || "Error"); setTimeout(()=>setMsg(""),3000); return false;
+  }
+
+  async function advanceApp(id: number, stage: Stage) {
+    if (stage === "rejected" && !window.confirm("Reject this candidate?")) return;
+    await post("advance_application", { id, stage });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Recruitment Pipeline</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{stats.active} active candidates · {stats.hired} hired · {jobs.filter((j:any)=>j.status==="open").length} open positions</p>
+        </div>
+        <div className="flex gap-2">
+          {msg && <span className="text-xs text-red-500 self-center">{msg}</span>}
+          {subTab === "jobs" && <button onClick={()=>setShowCreateJob(!showCreateJob)} className="px-3 py-1.5 rounded-lg bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600">+ New Job</button>}
+          {subTab === "offers" && <button onClick={()=>setShowCreateOffer(!showCreateOffer)} className="px-3 py-1.5 rounded-lg bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600">+ New Offer</button>}
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label:"Open Positions", value: jobs.filter((j:any)=>j.status==="open").length, color:"text-violet-700" },
+          { label:"Total Applications", value: apps.length, color:"text-blue-700" },
+          { label:"In Offer Stage", value: stats.offers, color:"text-amber-700" },
+          { label:"Hired This Cycle", value: stats.hired, color:"text-emerald-700" },
+        ].map((s,i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        {(["pipeline","jobs","offers","onboarding"] as const).map(t => (
+          <button key={t} onClick={()=>setSubTab(t)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold capitalize transition ${subTab===t?"bg-white text-slate-900 shadow-sm":"text-slate-500 hover:text-slate-700"}`}>
+            {t === "pipeline" ? `Pipeline (${apps.filter((a:any)=>a.status==="active").length})` : t === "offers" ? `Offers (${offers.length})` : t === "onboarding" ? `Onboarding (${checklists.length})` : `Jobs (${jobs.length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Pipeline Kanban ───────────────────────────────────────────────── */}
+      {subTab === "pipeline" && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+          {STAGES.map(stage => {
+            const cols = apps.filter((a:any)=>a.stage===stage);
+            return (
+              <div key={stage} className="bg-slate-50 rounded-xl p-2 min-h-[180px]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${STAGE_COLORS[stage]}`}>{stage}</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">{cols.length}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {cols.map((a:any) => (
+                    <div key={a.id} className="bg-white rounded-lg border border-slate-200 p-2 shadow-sm cursor-pointer hover:border-violet-300 transition" onClick={()=>setSelectedApp(selectedApp?.id===a.id?null:a)}>
+                      <div className="font-semibold text-slate-800 text-[11px] leading-tight">{a.candidate_name}</div>
+                      <div className="text-[9px] text-slate-400 truncate">{a.job_title}</div>
+                      {a.rating && <div className="text-[9px] text-amber-600 font-bold mt-0.5">★ {a.rating}</div>}
+                      {a.source && <div className="text-[9px] text-slate-300 capitalize">{a.source}</div>}
+                      {/* Action buttons */}
+                      {STAGE_NEXT[stage] && (
+                        <button onClick={e=>{e.stopPropagation(); advanceApp(a.id, STAGE_NEXT[stage]!.next);}}
+                          className="mt-1.5 w-full py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold hover:bg-emerald-100">
+                          {STAGE_NEXT[stage]!.label} →
+                        </button>
+                      )}
+                      {stage!=="rejected" && stage!=="hired" && (
+                        <button onClick={e=>{e.stopPropagation(); advanceApp(a.id, "rejected");}}
+                          className="mt-0.5 w-full py-0.5 rounded bg-red-50 text-red-400 text-[9px] hover:bg-red-100">
+                          Reject
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {cols.length === 0 && <div className="text-[10px] text-slate-300 text-center py-4">Empty</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Candidate detail drawer */}
+      {selectedApp && subTab === "pipeline" && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-2">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="font-bold text-slate-800">{selectedApp.candidate_name}</div>
+              <div className="text-xs text-slate-500">{selectedApp.candidate_email} · {selectedApp.candidate_phone}</div>
+              <div className="text-xs text-slate-500">Applied for: {selectedApp.job_title} · Source: {selectedApp.source}</div>
+            </div>
+            <button onClick={()=>setSelectedApp(null)} className="text-slate-300 hover:text-slate-600 text-lg">✕</button>
+          </div>
+          <div className="flex gap-2 flex-wrap text-xs">
+            <span className={`px-2 py-0.5 rounded-full font-bold capitalize ${STAGE_COLORS[selectedApp.stage as Stage]}`}>{selectedApp.stage}</span>
+            {selectedApp.rating && <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold">★ {selectedApp.rating}</span>}
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{selectedApp.ref}</span>
+            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{String(selectedApp.applied_at||"").slice(0,10)}</span>
+          </div>
+          {selectedApp.notes && <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-2">{selectedApp.notes}</p>}
+          {selectedApp.stage === "interview" && (
+            <button onClick={async()=>{ await post("create_offer",{application_id:selectedApp.id, position:selectedApp.job_title, department:selectedApp.job_department, offered_salary:15000, housing_allowance:3000, transport_allowance:1000, start_date:"2026-05-01"}); setSubTab("offers"); setSelectedApp(null); }}
+              className="px-3 py-1.5 rounded-lg bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600">
+              Generate Offer Letter
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Jobs Table ──────────────────────────────────────────────────── */}
+      {subTab === "jobs" && (
+        <div className="space-y-3">
+          {showCreateJob && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">New Job Posting</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><label className="text-xs text-slate-500">Job Title *</label><input value={newJob.title} onChange={e=>setNewJob({...newJob,title:e.target.value})} placeholder="e.g. Senior Software Engineer" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Department *</label><input value={newJob.department} onChange={e=>setNewJob({...newJob,department:e.target.value})} placeholder="e.g. Information Technology" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Salary Range</label><input value={newJob.salary_range} onChange={e=>setNewJob({...newJob,salary_range:e.target.value})} placeholder="e.g. 10,000-15,000 SAR" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Location</label><input value={newJob.location} onChange={e=>setNewJob({...newJob,location:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div className="col-span-2"><label className="text-xs text-slate-500">Type</label>
+                  <select value={newJob.employment_type} onChange={e=>setNewJob({...newJob,employment_type:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="internship">Internship</option>
+                  </select>
+                </div>
+                <div className="col-span-2"><label className="text-xs text-slate-500">Description</label><textarea value={newJob.description} onChange={e=>setNewJob({...newJob,description:e.target.value})} rows={2} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"/></div>
+                <div className="col-span-2"><label className="text-xs text-slate-500">Requirements</label><textarea value={newJob.requirements} onChange={e=>setNewJob({...newJob,requirements:e.target.value})} rows={2} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"/></div>
+              </div>
+              <div className="flex gap-2">
+                <button disabled={saving||!newJob.title||!newJob.department} onClick={async()=>{ if(await post("create_job",newJob)){setShowCreateJob(false);setNewJob({title:"",department:"",description:"",requirements:"",salary_range:"",location:"Riyadh",employment_type:"full_time"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold hover:bg-violet-600 disabled:opacity-50">{saving?"Saving...":"Create Posting"}</button>
+                <button onClick={()=>setShowCreateJob(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              </div>
+            </div>
+          )}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b text-slate-500 font-semibold">
+                <tr><th className="px-4 py-2 text-left">Ref</th><th className="px-4 py-2 text-left">Title</th><th className="px-4 py-2 text-left">Dept</th><th className="px-4 py-2 text-left">Salary</th><th className="px-4 py-2 text-center">Apps</th><th className="px-4 py-2 text-left">Status</th><th className="px-4 py-2"></th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {jobs.map((j:any) => (
+                  <tr key={j.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-mono text-slate-400">{j.ref}</td>
+                    <td className="px-4 py-2 font-semibold text-slate-800">{j.title}</td>
+                    <td className="px-4 py-2 text-slate-500">{j.department}</td>
+                    <td className="px-4 py-2 text-emerald-600">{j.salary_range}</td>
+                    <td className="px-4 py-2 text-center"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold">{j.app_count||0}</span></td>
+                    <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${j.status==="open"?"bg-emerald-50 text-emerald-700":"bg-slate-100 text-slate-500"}`}>{j.status}</span></td>
+                    <td className="px-4 py-2">
+                      <button onClick={()=>post("update_job_status",{id:j.id,status:j.status==="open"?"closed":"open"})} className={`text-[10px] font-semibold hover:underline ${j.status==="open"?"text-red-400":"text-emerald-600"}`}>{j.status==="open"?"Close":"Reopen"}</button>
+                    </td>
+                  </tr>
+                ))}
+                {jobs.length===0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-300">No job postings yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Offer Letters ─────────────────────────────────────────────── */}
+      {subTab === "offers" && (
+        <div className="space-y-3">
+          {showCreateOffer && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+              <h3 className="font-bold text-slate-800 text-sm">Create Offer Letter</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><label className="text-xs text-slate-500">Application ID</label><input value={offerForm.application_id} onChange={e=>setOfferForm({...offerForm,application_id:e.target.value})} placeholder="e.g. 4" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Position *</label><input value={offerForm.position} onChange={e=>setOfferForm({...offerForm,position:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Department *</label><input value={offerForm.department} onChange={e=>setOfferForm({...offerForm,department:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Basic Salary (SAR)</label><input type="number" value={offerForm.offered_salary} onChange={e=>setOfferForm({...offerForm,offered_salary:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Housing Allowance</label><input type="number" value={offerForm.housing_allowance} onChange={e=>setOfferForm({...offerForm,housing_allowance:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Transport Allowance</label><input type="number" value={offerForm.transport_allowance} onChange={e=>setOfferForm({...offerForm,transport_allowance:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Start Date</label><input type="date" value={offerForm.start_date} onChange={e=>setOfferForm({...offerForm,start_date:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div><label className="text-xs text-slate-500">Contract Type</label>
+                  <select value={offerForm.contract_type} onChange={e=>setOfferForm({...offerForm,contract_type:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="permanent">Permanent</option><option value="fixed_term">Fixed Term</option><option value="contract">Contract</option>
+                  </select>
+                </div>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-700">
+                Total package: SAR {((Number(offerForm.offered_salary)||0)+(Number(offerForm.housing_allowance)||0)+(Number(offerForm.transport_allowance)||0)).toLocaleString()} / month
+              </div>
+              <div className="flex gap-2">
+                <button disabled={saving||!offerForm.position||!offerForm.department} onClick={async()=>{ if(await post("create_offer",offerForm)){setShowCreateOffer(false);setOfferForm({application_id:"",position:"",department:"",offered_salary:"",housing_allowance:"",transport_allowance:"",start_date:"",contract_type:"permanent"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold disabled:opacity-50">{saving?"Saving...":"Create Offer"}</button>
+                <button onClick={()=>setShowCreateOffer(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              </div>
+            </div>
+          )}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 border-b text-slate-500 font-semibold">
+                <tr><th className="px-4 py-2 text-left">Ref</th><th className="px-4 py-2 text-left">Candidate</th><th className="px-4 py-2 text-left">Position</th><th className="px-4 py-2 text-right">Package</th><th className="px-4 py-2 text-left">Start</th><th className="px-4 py-2 text-left">Status</th><th className="px-4 py-2"></th></tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {offers.map((o:any) => {
+                  const total = (Number(o.offered_salary)||0)+(Number(o.housing_allowance)||0)+(Number(o.transport_allowance)||0);
+                  return (
+                    <tr key={o.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-mono text-slate-400">{o.ref}</td>
+                      <td className="px-4 py-2 font-semibold text-slate-800">{o.candidate_name}<div className="text-[10px] text-slate-400">{o.candidate_email}</div></td>
+                      <td className="px-4 py-2 text-slate-600">{o.position}<div className="text-[10px] text-slate-400">{o.department}</div></td>
+                      <td className="px-4 py-2 text-right font-bold text-emerald-700">SAR {total.toLocaleString()}<div className="text-[9px] text-slate-400 font-normal">{o.contract_type}</div></td>
+                      <td className="px-4 py-2 text-slate-500">{String(o.start_date||"").slice(0,10)}</td>
+                      <td className="px-4 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${o.status==="accepted"?"bg-emerald-50 text-emerald-700":o.status==="rejected"?"bg-red-50 text-red-600":o.status==="sent"?"bg-blue-50 text-blue-700":"bg-slate-100 text-slate-500"}`}>{o.status}</span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex gap-1">
+                          {o.status==="draft" && <button onClick={()=>post("send_offer",{id:o.id})} className="text-[10px] text-blue-600 hover:underline font-semibold">Send</button>}
+                          {o.status==="sent" && <button onClick={()=>post("accept_offer",{id:o.id})} className="text-[10px] text-emerald-600 hover:underline font-semibold">Accept</button>}
+                          {o.status==="sent" && <button onClick={()=>post("reject_offer",{id:o.id,reason:"Candidate declined"})} className="text-[10px] text-red-400 hover:underline">Reject</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {offers.length===0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-300">No offer letters yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Onboarding ────────────────────────────────────────────────── */}
+      {subTab === "onboarding" && (
+        <div className="space-y-3">
+          {checklists.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 text-sm">No onboarding checklists yet.<br/><span className="text-xs">Accept an offer to auto-generate a checklist.</span></div>
+          ) : (
+            checklists.map((cl:any) => {
+              const clTasks = tasks.filter((t:any)=>t.checklist_id===cl.id);
+              const done = clTasks.filter((t:any)=>t.status==="completed").length;
+              const pct = clTasks.length ? Math.round(done/clTasks.length*100) : 0;
+              const categories = [...new Set(clTasks.map((t:any)=>t.category))];
+              return (
+                <div key={cl.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="font-bold text-slate-800">{cl.candidate_name}</div>
+                      <div className="text-xs text-slate-500">{cl.position} · {cl.department}</div>
+                      <div className="text-xs text-slate-400">Start: {String(cl.start_date||"").slice(0,10)} · HR: {cl.hr_assignee}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-black text-emerald-600">{pct}%</div>
+                      <div className="text-[10px] text-slate-400">{done}/{clTasks.length} tasks</div>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-3">
+                    <div className="h-full bg-emerald-400 rounded-full transition-all" style={{width:`${pct}%`}}/>
+                  </div>
+                  {/* Tasks by category */}
+                  {categories.map(cat => (
+                    <div key={cat as string} className="mb-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{(cat as string).replace(/_/g," ")}</div>
+                      <div className="space-y-1">
+                        {clTasks.filter((t:any)=>t.category===cat).map((task:any) => (
+                          <div key={task.id} className={`flex items-center gap-2 p-2 rounded-lg ${task.status==="completed"?"bg-emerald-50":"bg-slate-50"}`}>
+                            <button onClick={()=>{ if(task.status!=="completed") post("complete_onboarding_task",{task_id:task.id,completed_by:"admin"}); }}
+                              className={`w-4 h-4 rounded flex-shrink-0 border ${task.status==="completed"?"bg-emerald-500 border-emerald-500":"border-slate-300 hover:border-emerald-400"} flex items-center justify-center`}>
+                              {task.status==="completed" && <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-xs font-medium ${task.status==="completed"?"text-slate-400 line-through":"text-slate-700"}`}>{task.task}</div>
+                              <div className="text-[10px] text-slate-400">{task.responsible} · {task.due_days<0?`${Math.abs(task.due_days)}d before`:task.due_days===0?"Day 1":`Day ${task.due_days}`}</div>
+                            </div>
+                            {task.status==="completed" && <span className="text-[9px] text-emerald-600 font-semibold">Done</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [tab, setTab] = useState("Overview");
@@ -217,6 +558,8 @@ export default function AdminPage() {
   const [auditLog, setAuditLog] = useState<any[]>([]);
 
   const [recruitmentData, setRecruitmentData] = useState<any>(null);
+  const [offerData, setOfferData] = useState<any>(null);
+  const [onboardingData, setOnboardingData] = useState<any>(null);
   const [geofenceData, setGeofenceData] = useState<any>(null);
   const [workflowData, setWorkflowData] = useState<any>(null);
   const [trainingData, setTrainingData] = useState<any>(null);
@@ -1071,108 +1414,16 @@ export default function AdminPage() {
 
         {/* REPORTS */}
         {tab === "Recruitment" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900 tracking-tight">Recruitment Pipeline</h2>
-              <button onClick={() => setShowCreateJob(!showCreateJob)} className="px-4 py-2 rounded-xl bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600 shadow-sm shadow-violet-200">{showCreateJob ? "Cancel" : "+ New Job"}</button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <StatCard label="Open Positions" value={recruitmentData?.stats?.open_count || 0} color="text-violet-700" />
-              <StatCard label="Total Applications" value={recruitmentData?.applications?.length || 0} color="text-blue-700" />
-              <StatCard label="Total Postings" value={recruitmentData?.stats?.total || 0} color="text-gray-700" />
-            </div>
-            {showCreateJob && (
-              <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm space-y-3">
-                <h3 className="text-sm font-bold text-gray-900">Create Job Posting</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <input placeholder="Job Title *" value={newJob.title} onChange={e => setNewJob({...newJob, title: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                  <input placeholder="Department *" value={newJob.department} onChange={e => setNewJob({...newJob, department: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                  <input placeholder="Salary Range (e.g. 10,000-15,000 SAR)" value={newJob.salary_range} onChange={e => setNewJob({...newJob, salary_range: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                  <input placeholder="Location" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                  <select value={newJob.employment_type} onChange={e => setNewJob({...newJob, employment_type: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-violet-200">
-                    <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="internship">Internship</option>
-                  </select>
-                  <input type="date" placeholder="Start Date" value={editingCourse ? editingCourse.start_date || "" : newCourse.start_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, start_date: e.target.value}) : setNewCourse({...newCourse, start_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                  <input type="date" placeholder="End Date" value={editingCourse ? editingCourse.end_date || "" : newCourse.end_date} onChange={e => editingCourse ? setEditingCourse({...editingCourse, end_date: e.target.value}) : setNewCourse({...newCourse, end_date: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                  <input placeholder="Location" value={editingCourse ? editingCourse.location || "" : newCourse.location} onChange={e => editingCourse ? setEditingCourse({...editingCourse, location: e.target.value}) : setNewCourse({...newCourse, location: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                  <input placeholder="Schedule (e.g. Mon/Wed 2-4pm)" value={editingCourse ? editingCourse.schedule || "" : newCourse.schedule} onChange={e => editingCourse ? setEditingCourse({...editingCourse, schedule: e.target.value}) : setNewCourse({...newCourse, schedule: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                  <input type="number" placeholder="Max Seats (0=unlimited)" value={editingCourse ? editingCourse.max_seats || 0 : newCourse.max_seats} onChange={e => editingCourse ? setEditingCourse({...editingCourse, max_seats: Number(e.target.value)}) : setNewCourse({...newCourse, max_seats: Number(e.target.value)})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                  <input placeholder="Materials URL" value={editingCourse ? editingCourse.materials_url || "" : newCourse.materials_url} onChange={e => editingCourse ? setEditingCourse({...editingCourse, materials_url: e.target.value}) : setNewCourse({...newCourse, materials_url: e.target.value})} className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 outline-none" />
-                </div>
-                <textarea placeholder="Description" value={newJob.description} onChange={e => setNewJob({...newJob, description: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-16 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                <textarea placeholder="Requirements" value={newJob.requirements} onChange={e => setNewJob({...newJob, requirements: e.target.value})} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs h-14 resize-none focus:outline-none focus:ring-2 focus:ring-violet-200" />
-                <button onClick={async () => { if (!newJob.title || !newJob.department) return; await fetch("/api/admin?action=create_job", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(newJob) }); setShowCreateJob(false); setNewJob({title:"",department:"",description:"",requirements:"",salary_range:"",location:"Riyadh",employment_type:"full_time"}); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 shadow-sm shadow-emerald-200">Create Posting</button>
-              </div>
-            )}
-            {/* Job Postings Table */}
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Job Postings</h3></div>
-              <div className="max-h-[350px] overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 sticky top-0"><tr>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Ref</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Title</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Dept</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Location</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Salary</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Apps</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Status</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(recruitmentData?.jobs || []).map((j: any) => (
-                      <tr key={j.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-mono text-gray-400">{j.ref}</td>
-                        <td className="px-4 py-2 font-semibold text-gray-900">{j.title}</td>
-                        <td className="px-4 py-2 text-gray-600">{j.department}</td>
-                        <td className="px-4 py-2 text-gray-600">{j.location}</td>
-                        <td className="px-4 py-2 text-emerald-600 font-medium">{j.salary_range}</td>
-                        <td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[9px] font-semibold">{j.app_count}</span></td>
-                        <td className="px-4 py-2"><Badge text={j.status} color={j.status === "open" ? "emerald" : "gray"} /></td>
-                        <td className="px-4 py-2">
-                          {j.status === "open" && <button onClick={async () => { await fetch("/api/admin?action=update_job_status", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ job_id: j.id, status: "closed" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-red-500 hover:underline">Close</button>}
-                          {j.status !== "open" && <button onClick={async () => { await fetch("/api/admin?action=update_job_status", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ job_id: j.id, status: "open" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-emerald-500 hover:underline">Reopen</button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {/* Applications Table */}
-            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-bold text-gray-900">Applications ({(recruitmentData?.applications || []).length})</h3></div>
-              <div className="max-h-[350px] overflow-y-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 sticky top-0"><tr>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Ref</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Candidate</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Position</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Stage</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Score</th>
-                    <th className="text-left px-4 py-2 font-semibold text-gray-500">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(recruitmentData?.applications || []).map((a: any) => (
-                      <tr key={a.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2 font-mono text-gray-400">{a.ref}</td>
-                        <td className="px-4 py-2"><div className="font-semibold text-gray-900">{a.candidate_name}</div><div className="text-[10px] text-gray-400">{a.candidate_email}</div></td>
-                        <td className="px-4 py-2 text-gray-600">{a.job_title}</td>
-                        <td className="px-4 py-2"><Badge text={a.stage} color={a.stage === "hired" ? "emerald" : a.stage === "rejected" ? "red" : a.stage === "offer" ? "violet" : a.stage === "interview" ? "amber" : "blue"} /></td>
-                        <td className="px-4 py-2">{a.score > 0 ? <span className="font-bold">{a.score}%</span> : <span className="text-gray-300">--</span>}</td>
-                        <td className="px-4 py-2 space-x-2">
-                          {a.stage === "screening" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "interview", status: "shortlisted" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-amber-600 hover:underline font-semibold">Shortlist</button>}
-                          {a.stage === "interview" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "offer", status: "offered" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-violet-600 hover:underline font-semibold">Make Offer</button>}
-                          {a.stage === "offer" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "hired", status: "hired" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-emerald-600 hover:underline font-semibold">Hire</button>}
-                          {a.stage !== "rejected" && a.stage !== "hired" && <button onClick={async () => { await fetch("/api/admin?action=advance_application", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ app_id: a.id, stage: "rejected", status: "rejected" }) }); adminFetch("section=recruitment").then(d => d && setRecruitmentData(d)); }} className="text-[10px] text-red-400 hover:underline">Reject</button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <RecruitmentPanel
+            data={recruitmentData}
+            offerData={offerData}
+            onboardingData={onboardingData}
+            onRefresh={() => {
+              adminFetch("section=recruitment").then(d => d && setRecruitmentData(d));
+              adminFetch("section=offer_letters").then(d => d && setOfferData(d));
+              adminFetch("section=onboarding").then(d => d && setOnboardingData(d));
+            }}
+          />
         )}
         {tab === "Interviews" && (
           <div className="space-y-4">
