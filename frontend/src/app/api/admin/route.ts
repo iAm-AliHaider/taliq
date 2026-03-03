@@ -3,6 +3,15 @@ import { neon } from "@neondatabase/serverless";
 
 const sql = neon(process.env.DATABASE_URL!);
 
+
+
+
+async function audit(actor: string, action: string, entity_type: string, entity_id: string, details: string) {
+  try {
+    await sql`INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details) VALUES (${actor}, ${action}, ${entity_type}, ${entity_id}, ${details})`;
+  } catch (e) { console.error("audit log error:", e); }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const section = searchParams.get("section") || "overview";
@@ -220,18 +229,24 @@ export async function POST(request: NextRequest) {
       } else if (type === "travel") {
         await sql`UPDATE travel_requests SET status = ${decision} WHERE ref = ${ref}`;
       }
+          await audit(body.actor_id || "system", "approve", "body.type", String(body.ref), `${body.type} ${body.decision}: ${body.ref}`);
+          await audit(body.actor_id || "system", "approve", "body.type", String(body.ref), `${body.type} ${body.decision}: ${body.ref}`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "reassign") {
       const { employeeId, newManagerId } = body;
       await sql`UPDATE employees SET manager_id = ${newManagerId} WHERE id = ${employeeId}`;
+          await audit(body.actor_id || "system", "reassign", "leave", String(body.ref), `reassign leave ${body.ref} to ${body.new_approver}`);
+          await audit(body.actor_id || "system", "reassign", "leave", String(body.ref), `reassign leave ${body.ref}`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "policy") {
       const { category, config } = body;
       await sql`UPDATE policies SET config = ${JSON.stringify(config)}::jsonb, updated_at = NOW(), updated_by = 'admin' WHERE category = ${category}`;
+          await audit(body.actor_id || "system", "update_policy", "policy", String(body.category), `policy update: ${body.category}`);
+          await audit(body.actor_id || "system", "update_policy", "policy", String(body.category), `policy: ${body.category}`);
       return NextResponse.json({ ok: true });
     }
 
@@ -274,14 +289,18 @@ export async function POST(request: NextRequest) {
 
     if (action === "create_announcement") {
       const { title, content, author, priority } = body;
-      if (!title || !content) return NextResponse.json({ error: "Title and content required" }, { status: 400 });
+      if (!title || !content)     await audit(body.actor_id || "system", "create", "announcement", String(''), `new announcement: ${body.title}`);
+          await audit(body.actor_id || "system", "create", "announcement", String(''), `announcement: ${body.title}`);
+      return NextResponse.json({ error: "Title and content required" }, { status: 400 });
       await sql`INSERT INTO announcements (title, content, author, priority) VALUES (${title}, ${content}, ${author || "Admin"}, ${priority || "normal"})`;
       return NextResponse.json({ ok: true });
     }
 
     if (action === "resolve_grievance") {
       const { ref, status, resolution, assignedTo } = body;
-      if (!ref) return NextResponse.json({ error: "Grievance ref required" }, { status: 400 });
+      if (!ref)     await audit(body.actor_id || "system", "resolve", "grievance", String(body.id), `resolve grievance: ${body.resolution}`);
+          await audit(body.actor_id || "system", "resolve", "grievance", String(body.id), `grievance resolved`);
+      return NextResponse.json({ error: "Grievance ref required" }, { status: 400 });
       if (status === "resolved" || status === "closed") {
         await sql`UPDATE grievances SET status = ${status}, resolution = ${resolution || ""}, resolved_at = NOW() WHERE ref = ${ref}`;
       } else if (assignedTo) {
@@ -294,7 +313,9 @@ export async function POST(request: NextRequest) {
 
     if (action === "delete_announcement") {
       const { id } = body;
-      if (!id) return NextResponse.json({ error: "Announcement id required" }, { status: 400 });
+      if (!id)     await audit(body.actor_id || "system", "delete", "announcement", String(body.id), `delete announcement ${body.id}`);
+          await audit(body.actor_id || "system", "delete", "announcement", String(body.id), `announcement deleted`);
+      return NextResponse.json({ error: "Announcement id required" }, { status: 400 });
       await sql`DELETE FROM announcements WHERE id = ${id}`;
       return NextResponse.json({ ok: true });
     }
@@ -302,14 +323,18 @@ export async function POST(request: NextRequest) {
 
     if (action === "create_employee") {
       const { id, name, nameAr, position, department, email, phone, joinDate, grade, nationality, managerId, basicSalary, housingAllowance, transportAllowance, pin } = body;
-      if (!id || !name) return NextResponse.json({ error: "ID and name required" }, { status: 400 });
+      if (!id || !name)     await audit(body.actor_id || "system", "create", "employee", String(''), `new employee: ${body.name}`);
+          await audit(body.actor_id || "system", "create", "employee", String(''), `employee: ${body.name}`);
+      return NextResponse.json({ error: "ID and name required" }, { status: 400 });
       await sql`INSERT INTO employees (id, name, name_ar, position, department, email, phone, join_date, grade, nationality, manager_id, basic_salary, housing_allowance, transport_allowance, pin) VALUES (${id}, ${name}, ${nameAr || ""}, ${position || ""}, ${department || ""}, ${email || ""}, ${phone || ""}, ${joinDate || new Date().toISOString().split("T")[0]}, ${grade || ""}, ${nationality || "Saudi"}, ${managerId || null}, ${Number(basicSalary) || 0}, ${Number(housingAllowance) || 0}, ${Number(transportAllowance) || 0}, ${pin || "1234"})`;
       return NextResponse.json({ ok: true });
     }
 
     if (action === "update_clearance") {
       const { ref, item, status } = body;
-      if (!ref || !item) return NextResponse.json({ error: "Ref and item required" }, { status: 400 });
+      if (!ref || !item)     await audit(body.actor_id || "system", "update", "clearance", String(body.employee_id), `clearance: ${body.department} ${body.status}`);
+          await audit(body.actor_id || "system", "update", "clearance", String(body.employee_id), `clearance: ${body.department}`);
+      return NextResponse.json({ error: "Ref and item required" }, { status: 400 });
       const [row] = await sql`SELECT clearance_status FROM exit_requests WHERE ref = ${ref}`;
       if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
       const clearance = typeof row.clearance_status === "string" ? JSON.parse(row.clearance_status) : row.clearance_status;
@@ -324,12 +349,16 @@ export async function POST(request: NextRequest) {
       const { title, department, description, requirements, salary_range, location, employment_type } = body;
       await sql`INSERT INTO job_postings (ref, title, department, description, requirements, salary_range, location, employment_type, status)
         VALUES ('JOB-' || TO_CHAR(NOW(), 'YYYY') || '-' || LPAD(NEXTVAL('job_postings_id_seq')::text, 3, '0'), ${title}, ${department}, ${description || ''}, ${requirements || ''}, ${salary_range || ''}, ${location || 'Riyadh'}, ${employment_type || 'full_time'}, 'open')`;
+          await audit(body.actor_id || "system", "create", "job", String(''), `new job: ${body.title}`);
+          await audit(body.actor_id || "system", "create", "job", String(''), `job: ${body.title}`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "update_job_status") {
       const { job_id, status } = body;
       await sql`UPDATE job_postings SET status = ${status}, updated_at = NOW() WHERE id = ${job_id}`;
+          await audit(body.actor_id || "system", "update", "job", String(body.id), `job status: ${body.status}`);
+          await audit(body.actor_id || "system", "update", "job", String(body.id), `job status: ${body.status}`);
       return NextResponse.json({ ok: true });
     }
 
@@ -360,6 +389,8 @@ export async function POST(request: NextRequest) {
       const ref = `INT-2026-${String(Number((count as any[])[0].c) + 1).padStart(3, '0')}`;
       await sql`INSERT INTO interviews (ref, candidate_name, position, interviewer_id, stage, total_questions, status)
         VALUES (${ref}, ${candidate_name}, ${position}, 'E005', ${stage || 'hr_screening'}, 5, 'in_progress')`;
+          await audit(body.actor_id || "system", "create", "interview", String(''), `interview: ${body.candidate_name}`);
+          await audit(body.actor_id || "system", "create", "interview", String(''), `interview: ${body.candidate_name}`);
       return NextResponse.json({ ok: true, ref });
     }
 
@@ -387,12 +418,16 @@ export async function POST(request: NextRequest) {
       const ref = `AST-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
       await sql`INSERT INTO assets (ref, name, asset_type, serial_number, assigned_to, condition, status, assigned_date)
         VALUES (${ref}, ${name}, ${asset_type}, ${serial_number || ''}, ${assigned_to || null}, ${condition || 'good'}, ${assigned_to ? 'assigned' : 'available'}, ${assigned_to ? new Date().toISOString().slice(0,10) : null})`;
+          await audit(body.actor_id || "system", "create", "asset", String(''), `asset: ${body.asset_name}`);
+          await audit(body.actor_id || "system", "create", "asset", String(''), `asset: ${body.asset_name}`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "return_asset") {
       const { ref } = body;
       await sql`UPDATE assets SET status = 'available', assigned_to = NULL, assigned_date = NULL WHERE ref = ${ref}`;
+          await audit(body.actor_id || "system", "return", "asset", String(body.id), `asset returned`);
+          await audit(body.actor_id || "system", "return", "asset", String(body.id), `asset returned`);
       return NextResponse.json({ ok: true });
     }
 
@@ -400,6 +435,8 @@ export async function POST(request: NextRequest) {
       const { name, start_time, end_time, break_minutes, is_night_shift, differential_pct } = body;
       await sql`INSERT INTO shifts (name, start_time, end_time, break_minutes, is_night_shift, differential_pct)
         VALUES (${name}, ${start_time}, ${end_time}, ${break_minutes || 60}, ${is_night_shift || false}, ${differential_pct || 0})`;
+          await audit(body.actor_id || "system", "create", "shift", String(''), `shift: ${body.name}`);
+          await audit(body.actor_id || "system", "create", "shift", String(''), `shift: ${body.name}`);
       return NextResponse.json({ ok: true });
     }
 
@@ -407,6 +444,8 @@ export async function POST(request: NextRequest) {
       const { employee_id, shift_id, effective_from } = body;
       await sql`INSERT INTO employee_shifts (employee_id, shift_id, effective_from) VALUES (${employee_id}, ${shift_id}, ${effective_from || new Date().toISOString().slice(0,10)})
         ON CONFLICT (employee_id) DO UPDATE SET shift_id = ${shift_id}, effective_from = ${effective_from || new Date().toISOString().slice(0,10)}`;
+          await audit(body.actor_id || "system", "assign", "shift", String(body.shift_id), `assign shift to ${body.employee_id}`);
+          await audit(body.actor_id || "system", "assign", "shift", String(body.shift_id), `shift assigned`);
       return NextResponse.json({ ok: true });
     }
 
@@ -414,6 +453,8 @@ export async function POST(request: NextRequest) {
       const { employee_id, contract_type, start_date, end_date, salary, probation_end } = body;
       await sql`INSERT INTO contracts (employee_id, contract_type, start_date, end_date, salary, probation_end, status)
         VALUES (${employee_id}, ${contract_type || 'unlimited'}, ${start_date}, ${end_date || null}, ${salary || 0}, ${probation_end || null}, 'active')`;
+          await audit(body.actor_id || "system", "create", "contract", String(''), `contract for ${body.employee_id}`);
+          await audit(body.actor_id || "system", "create", "contract", String(''), `contract: ${body.employee_id}`);
       return NextResponse.json({ ok: true });
     }
 
@@ -427,12 +468,16 @@ export async function POST(request: NextRequest) {
       const { ref, decision } = body;
       const status = decision === 'approved' ? 'approved' : 'rejected';
       await sql`UPDATE exit_requests SET status = ${status} WHERE ref = ${ref}`;
+          await audit(body.actor_id || "system", "approve", "exit", String(body.id), `exit approved`);
+          await audit(body.actor_id || "system", "approve", "exit", String(body.id), `exit approved`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "renew_iqama") {
       const { id, new_expiry, new_number } = body;
       await sql`UPDATE iqama_visa SET expiry_date = ${new_expiry}, document_number = COALESCE(${new_number}, document_number), status = 'active' WHERE id = ${id}`;
+          await audit(body.actor_id || "system", "renew", "iqama", String(body.employee_id), `iqama renewed`);
+          await audit(body.actor_id || "system", "renew", "iqama", String(body.employee_id), `iqama renewed`);
       return NextResponse.json({ ok: true });
     }
 
@@ -461,6 +506,8 @@ export async function POST(request: NextRequest) {
       const { course_id, title, description, passing_score, time_limit_minutes, max_attempts, exam_type } = body;
       const [row] = await sql`INSERT INTO course_exams (course_id, title, description, passing_score, time_limit_minutes, max_attempts, exam_type)
         VALUES (\${course_id || null}, \${title}, \${description || ''}, \${passing_score || 70}, \${time_limit_minutes || 30}, \${max_attempts || 3}, \${exam_type || 'training'}) RETURNING id`;
+          await audit(body.actor_id || "system", "create", "exam", String(''), `exam: ${body.title}`);
+          await audit(body.actor_id || "system", "create", "exam", String(''), `exam: ${body.title}`);
       return NextResponse.json({ ok: true, id: row.id });
     }
 
@@ -469,6 +516,8 @@ export async function POST(request: NextRequest) {
       await sql`DELETE FROM exam_attempts WHERE exam_id = \${id}`;
       await sql`DELETE FROM exam_questions WHERE exam_id = \${id}`;
       await sql`DELETE FROM course_exams WHERE id = \${id}`;
+          await audit(body.actor_id || "system", "delete", "exam", String(body.id), `exam deleted`);
+          await audit(body.actor_id || "system", "delete", "exam", String(body.id), `exam deleted`);
       return NextResponse.json({ ok: true });
     }
 
@@ -507,6 +556,8 @@ export async function POST(request: NextRequest) {
       const { title, description, provider, duration_hours, category, mandatory, start_date, end_date, schedule, location, max_seats, materials_url, syllabus } = body;
       await sql`INSERT INTO training_courses (title, description, provider, duration_hours, category, mandatory, status, start_date, end_date, schedule, location, max_seats, materials_url, syllabus) 
         VALUES (${title}, ${description || ''}, ${provider || 'Internal'}, ${duration_hours || 4}, ${category || 'general'}, ${mandatory ? 1 : 0}, 'available', ${start_date || null}, ${end_date || null}, ${schedule || null}, ${location || null}, ${max_seats || 0}, ${materials_url || null}, ${syllabus || null})`;
+          await audit(body.actor_id || "system", "create", "course", String(''), `course: ${body.name}`);
+          await audit(body.actor_id || "system", "create", "course", String(''), `course: ${body.name}`);
       return NextResponse.json({ ok: true });
     }
 
@@ -523,13 +574,17 @@ export async function POST(request: NextRequest) {
       const { id } = body;
       await sql`DELETE FROM employee_trainings WHERE course_id = ${id}`;
       await sql`DELETE FROM training_courses WHERE id = ${id}`;
+          await audit(body.actor_id || "system", "delete", "course", String(body.id), `course deleted`);
+          await audit(body.actor_id || "system", "delete", "course", String(body.id), `course deleted`);
       return NextResponse.json({ ok: true });
     }
 
     if (action === "enroll_employee") {
       const { employee_id, course_id } = body;
       const existing = await sql`SELECT id FROM employee_trainings WHERE employee_id=${employee_id} AND course_id=${course_id} AND status != 'dropped'`;
-      if (existing.length > 0) return NextResponse.json({ error: "Already enrolled" }, { status: 400 });
+      if (existing.length > 0)     await audit(body.actor_id || "system", "enroll", "training", String(body.course_id), `enroll ${body.employee_id}`);
+          await audit(body.actor_id || "system", "enroll", "training", String(body.course_id), `enroll: ${body.employee_id}`);
+      return NextResponse.json({ error: "Already enrolled" }, { status: 400 });
       await sql`INSERT INTO employee_trainings (employee_id, course_id) VALUES (${employee_id}, ${course_id})`;
       return NextResponse.json({ ok: true });
     }
