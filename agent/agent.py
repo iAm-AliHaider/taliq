@@ -584,19 +584,7 @@ async def entrypoint(ctx: JobContext):
         questions = state.get("questions", [])
         
         await session.start(room=ctx.room, agent=InterviewAgent(cand_name, cand_position, questions))
-        
-        # Interview greeting — agent will follow the system prompt
-        greeting = f"Welcome {cand_name}! I am Taliq, your AI interviewer. We will go through a few questions for the {cand_position} role. Take your time with each answer. Let me start with the first question."
-        await session.say(greeting, allow_interruptions=False)
-        
-        # Trigger first question
-        await asyncio.sleep(1)
-        try:
-            session.generate_reply(user_input="Please ask the first interview question now.")
-        except Exception as e:
-            logger.error(f"First question trigger failed: {e}")
-        
-        logger.info("Interview mode active — waiting for candidate responses")
+        logger.info(f"Interview mode active for {cand_name}, {len(questions)} questions — LLM will drive")
         return
     
     await session.start(room=ctx.room, agent=TaliqAgent())
