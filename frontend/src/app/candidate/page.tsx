@@ -40,7 +40,8 @@ export default function CandidatePortal() {
   }
 
   async function loadStatus(r: string) {
-    const res = await fetch(`/api/candidate?section=my_status&ref=${r}`).then(r => r.json());
+    const saved = JSON.parse(localStorage.getItem('taliq_candidate') || '{}');
+    const res = await fetch(`/api/candidate?section=my_status&ref=${r}&pin=${saved.pin || ''}`).then(r => r.json());
     setData(res);
   }
 

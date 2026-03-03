@@ -23,7 +23,12 @@ export async function GET(req: NextRequest) {
     // Candidate portal: my application status
     if (section === "my_status") {
       const app_ref = searchParams.get("ref");
-      if (!app_ref) return NextResponse.json({ error: "ref required" }, { status: 400 });
+      const pin = searchParams.get("pin");
+      if (!app_ref || !pin) return NextResponse.json({ error: "ref and pin required" }, { status: 400 });
+      
+      // Verify PIN
+      const [auth] = await sql`SELECT id FROM job_applications WHERE ref = ${app_ref} AND pin = ${pin}`;
+      if (!auth) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       
       const [app] = await sql`
         SELECT a.*, j.title as job_title, j.department as job_department, j.salary_range,

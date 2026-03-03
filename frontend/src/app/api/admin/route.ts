@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "announcements") {
-      const rows = await sql`SELECT a.*, COALESCE(a.announce_on_login, FALSE) as announce_on_login, COALESCE(a.is_active, TRUE) as is_active FROM announcements a ORDER BY a.applied_at DESC`;
+      const rows = await sql`SELECT a.*, COALESCE(a.announce_on_login, FALSE) as announce_on_login, COALESCE(a.is_active, TRUE) as is_active FROM announcements a ORDER BY a.created_at DESC`;
       return NextResponse.json(rows);
     }
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
 
     if (section === "recruitment") {
       const jobs = await sql`SELECT jp.*, (SELECT COUNT(*) FROM job_applications WHERE job_id = jp.id) as app_count FROM job_postings jp ORDER BY created_at DESC`;
-      const apps = await sql`SELECT a.*, j.title as job_title, j.department as job_department FROM job_applications a LEFT JOIN job_postings j ON a.job_id = j.id ORDER BY a.created_at DESC`;
+      const apps = await sql`SELECT a.*, j.title as job_title, j.department as job_department FROM job_applications a LEFT JOIN job_postings j ON a.job_id = j.id ORDER BY a.applied_at DESC`;
       const stats = await sql`SELECT COUNT(*) as total, SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) as open_count FROM job_postings`;
       return NextResponse.json({ jobs, applications: apps, stats: stats[0] });
     }
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
       const employees = await sql`SELECT department, nationality, COUNT(*) as cnt FROM employees GROUP BY department, nationality`;
       const leaveBalance = await sql`SELECT e.department, SUM(e.annual_leave) as total_annual, SUM(e.sick_leave) as total_sick FROM employees e GROUP BY e.department`;
       const recentHires = await sql`SELECT id, name, position, department, join_date FROM employees ORDER BY join_date DESC LIMIT 5`;
-      const payrollSummary = await sql`SELECT ref, period, total_gross, total_deductions, total_net, status FROM payroll_runs ORDER BY id DESC LIMIT 6`;
+      const payrollSummary = await sql`SELECT ref, period_label as period, total_gross, total_deductions, total_net, status FROM payroll_runs ORDER BY id DESC LIMIT 6`;
       return NextResponse.json({ metrics, employees, leaveBalance, recentHires, payrollSummary });
     }
 
