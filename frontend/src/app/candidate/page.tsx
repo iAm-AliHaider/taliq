@@ -1,4 +1,5 @@
 "use client";
+import VoiceInterview from "./voice-interview";
 import { useState, useEffect, useRef } from "react";
 
 const STAGES = ["applied","screening","interview","offer","hired"] as const;
@@ -33,6 +34,7 @@ export default function CandidatePortal() {
 
   // Interview state
   const [interviewStarted, setInterviewStarted] = useState(false);
+  const [showVoiceInterview, setShowVoiceInterview] = useState(false);
   const [interviewQuestions, setInterviewQuestions] = useState<any[]>([]);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [interviewSubmitting, setInterviewSubmitting] = useState(false);
@@ -279,6 +281,18 @@ export default function CandidatePortal() {
           </div>
         )}
 
+        {/* ── VOICE INTERVIEW ────────────────────────────────────────── */}
+        {showVoiceInterview && app.stage === "interview" && (
+          <VoiceInterview
+            applicationRef={ref}
+            applicationId={app.id}
+            candidateName={app.candidate_name}
+            position={app.job_title || "General Position"}
+            pin={pin}
+            onComplete={() => { setShowVoiceInterview(false); loadStatus(ref, pin); }}
+          />
+        )}
+
         {/* ── INTERVIEW STAGE ─────────────────────────────────────────────── */}
         {app.stage === "interview" && !data.interview?.status?.includes("completed") && !interviewResult && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -293,10 +307,17 @@ export default function CandidatePortal() {
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
                   <strong>Tips:</strong> Answer each question thoroughly. Write at least 2-3 sentences per answer. Be specific about your experience and achievements.
                 </div>
-                <button onClick={startInterview}
-                  className="px-8 py-3 rounded-xl bg-amber-500 text-white font-bold shadow-lg shadow-amber-500/20 hover:bg-amber-600 transition">
-                  Start Interview
-                </button>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => setShowVoiceInterview(true)}
+                    className="px-8 py-3 rounded-xl bg-amber-500 text-white font-bold shadow-lg shadow-amber-500/20 hover:bg-amber-600 transition flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                    Start Voice Interview
+                  </button>
+                  <button onClick={startInterview}
+                    className="px-8 py-2 rounded-xl border border-amber-200 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition">
+                    Use Text Interview Instead
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">

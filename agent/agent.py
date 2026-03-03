@@ -54,6 +54,10 @@ except Exception as e:
 from edge_tts_plugin import EdgeTTS
 
 # Import all tools and core utilities from modular tools package
+from tools.candidate_interview import (
+    init_candidate_interview, get_interview_system_prompt,
+    next_interview_question, score_candidate_answer, complete_candidate_interview,
+)
 from tools.payroll import (
     show_payroll_runs, show_my_payslip, show_journal_voucher,
     list_gl_accounts, show_salary_history, give_salary_raise,
@@ -367,6 +371,14 @@ ALL_TOOLS = [
     show_all_eos_provisions,
 ]
 
+
+# Candidate interview tools (used in interview mode only)
+INTERVIEW_TOOLS = [
+    next_interview_question,
+    score_candidate_answer,
+    complete_candidate_interview,
+]
+
 MANAGER_ONLY_TOOLS = {
     "show_team_overview", "show_department_stats", "show_leave_calendar",
     "create_performance_review",
@@ -402,6 +414,15 @@ def get_tools_for_employee(emp_id: str):
 # ============================================================
 # AGENT CLASS
 # ============================================================
+
+
+class InterviewAgent(Agent):
+    """Agent in candidate interview mode — uses interview-specific prompt and tools."""
+    def __init__(self, candidate_name: str, position: str, questions: list):
+        super().__init__(
+            instructions=get_interview_system_prompt(candidate_name, position, questions),
+            tools=INTERVIEW_TOOLS,
+        )
 
 class TaliqAgent(Agent):
     def __init__(self):
@@ -508,6 +529,22 @@ async def entrypoint(ctx: JobContext):
                 break
         except (json.JSONDecodeError, TypeError):
             continue
+    # Detect interview mode
+    interview_mode = False
+    interview_meta = {}
+    for meta_str in meta_sources:
+        if not meta_str:
+            continue
+        try:
+            m = json.loads(meta_str)
+            if m.get("mode") == "interview":
+                interview_mode = True
+                interview_meta = m
+                logger.info(f"INTERVIEW MODE: candidate={m.get('candidate_name')}, app_ref={m.get('application_ref')}")
+                break
+        except (json.JSONDecodeError, TypeError):
+            continue
+
     set_current_employee_id(employee_id)
 
     session = AgentSession(
@@ -536,6 +573,32 @@ async def entrypoint(ctx: JobContext):
         if pkt.topic in ("lk-chat", "user_action"):
             asyncio.ensure_future(_handle_data(pkt))
 
+    # Branch based on mode
+    if interview_mode:
+        cand_name = interview_meta.get("candidate_name", "Candidate")
+        cand_position = interview_meta.get("position", "General Position")
+        app_id = interview_meta.get("application_id", 0)
+        
+        # Initialize interview state
+        state = init_candidate_interview(int(app_id) if app_id else 0, cand_name, cand_position)
+        questions = state.get("questions", [])
+        
+        await session.start(room=ctx.room, agent=InterviewAgent(cand_name, cand_position, questions))
+        
+        # Interview greeting — agent will follow the system prompt
+        greeting = f"Welcome {cand_name}! I am Taliq, your AI interviewer. We will go through a few questions for the {cand_position} role. Take your time with each answer. Let me start with the first question."
+        await session.say(greeting, allow_interruptions=False)
+        
+        # Trigger first question
+        await asyncio.sleep(1)
+        try:
+            session.generate_reply(user_input="Please ask the first interview question now.")
+        except Exception as e:
+            logger.error(f"First question trigger failed: {e}")
+        
+        logger.info("Interview mode active — waiting for candidate responses")
+        return
+    
     await session.start(room=ctx.room, agent=TaliqAgent())
     emp = db.get_employee(get_current_employee_id_from_context())
     if emp:
