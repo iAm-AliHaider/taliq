@@ -648,8 +648,8 @@ export async function POST(request: NextRequest) {
       const { application_id, position, department, offered_salary, housing_allowance, transport_allowance, start_date, contract_type } = body;
       const [app] = await sql`SELECT candidate_name FROM job_applications WHERE id = ${Number(application_id)}`;
       const ref = 'OFR-2026-' + String(Date.now()).slice(-3);
-      await sql`INSERT INTO offer_letters (ref, application_id, candidate_name, position, department, offered_salary, housing_allowance, transport_allowance, start_date, contract_type, created_by)
-        VALUES (${ref}, ${Number(application_id)}, ${app?.candidate_name || body.candidate_name}, ${position}, ${department}, ${Number(offered_salary)}, ${Number(housing_allowance || 0)}, ${Number(transport_allowance || 0)}, ${start_date}, ${contract_type || 'permanent'}, ${body.actor_id || 'system'})`;
+      await sql`INSERT INTO offer_letters (ref, application_id, candidate_name, position, department, offered_salary, housing_allowance, transport_allowance, start_date, contract_type, created_by, status)
+        VALUES (${ref}, ${Number(application_id)}, ${app?.candidate_name || body.candidate_name}, ${position}, ${department}, ${Number(offered_salary)}, ${Number(housing_allowance || 0)}, ${Number(transport_allowance || 0)}, ${start_date}, ${contract_type || 'permanent'}, ${body.actor_id || 'system'}, ${body.status || 'sent'})`;
       await sql`UPDATE job_applications SET stage = 'offer' WHERE id = ${Number(application_id)}`;
       await audit(body.actor_id || "system", "create", "offer_letter", ref, `offer for ${app?.candidate_name}`);
       return NextResponse.json({ ok: true, ref });
