@@ -204,11 +204,12 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
   data: any; offerData: any; onboardingData: any; onRefresh: () => void;
 }) {
   const [subTab, setSubTab] = useState<"pipeline"|"jobs"|"offers"|"onboarding">("pipeline");
+  const [settingsData, setSettingsData] = useState<{departments: any[], paygrades: any[]}>({departments: [], paygrades: []});
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showCreateOffer, setShowCreateOffer] = useState(false);
   const [selectedApp, setSelectedApp] = useState<any>(null);
-  const [newJob, setNewJob] = useState({ title:"", department:"", description:"", requirements:"", salary_range:"", location:"Riyadh", employment_type:"full_time" });
-  const [offerForm, setOfferForm] = useState({ application_id:"", position:"", department:"", offered_salary:"", housing_allowance:"", transport_allowance:"", start_date:"", contract_type:"permanent" });
+  const [newJob, setNewJob] = useState({ title:"", department:"", department_id:"", paygrade_id:"", description:"", requirements:"", salary_range:"", location:"Riyadh", employment_type:"full_time" });
+  const [offerForm, setOfferForm] = useState({ application_id:"", position:"", department:"", paygrade_id:"", offered_salary:"", housing_allowance:"", transport_allowance:"", start_date:"", contract_type:"permanent" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -217,6 +218,11 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
   const offers: any[] = offerData?.offers || [];
   const checklists: any[] = onboardingData?.checklists || [];
   const tasks: any[] = onboardingData?.tasks || [];
+
+  
+  useEffect(() => {
+    fetch("/api/admin?section=settings").then(r => r.json()).then(setSettingsData);
+  }, [onRefresh]);
 
   const stats = {
     total: apps.length,
@@ -356,8 +362,20 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
               <h3 className="font-bold text-slate-800 text-sm">New Job Posting</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><label className="text-xs text-slate-500">Job Title *</label><input value={newJob.title} onChange={e=>setNewJob({...newJob,title:e.target.value})} placeholder="e.g. Senior Software Engineer" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
-                <div><label className="text-xs text-slate-500">Department *</label><input value={newJob.department} onChange={e=>setNewJob({...newJob,department:e.target.value})} placeholder="e.g. Information Technology" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
-                <div><label className="text-xs text-slate-500">Salary Range</label><input value={newJob.salary_range} onChange={e=>setNewJob({...newJob,salary_range:e.target.value})} placeholder="e.g. 10,000-15,000 SAR" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div>
+                  <label className="text-xs text-slate-500">Department *</label>
+                  <select value={newJob.department_id} onChange={e=>{ const d = settingsData.departments.find(d=>d.id==e.target.value); setNewJob({...newJob, department_id: e.target.value, department: d?.name || ""}); }} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="">Select Department</option>
+                    {settingsData.departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500">Pay Grade (Auto Salary)</label>
+                  <select value={newJob.paygrade_id} onChange={e=>{ const g = settingsData.paygrades.find(g=>g.id==e.target.value); setNewJob({...newJob, paygrade_id: e.target.value, salary_range: g ? `${g.min_salary/1000}K - ${g.max_salary/1000}K SAR` : ""}); }} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="">Select Grade</option>
+                    {settingsData.paygrades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
+                  </select>
+                </div>
                 <div><label className="text-xs text-slate-500">Location</label><input value={newJob.location} onChange={e=>setNewJob({...newJob,location:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
                 <div className="col-span-2"><label className="text-xs text-slate-500">Type</label>
                   <select value={newJob.employment_type} onChange={e=>setNewJob({...newJob,employment_type:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
@@ -368,7 +386,7 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
                 <div className="col-span-2"><label className="text-xs text-slate-500">Requirements</label><textarea value={newJob.requirements} onChange={e=>setNewJob({...newJob,requirements:e.target.value})} rows={2} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"/></div>
               </div>
               <div className="flex gap-2">
-                <button disabled={saving||!newJob.title||!newJob.department} onClick={async()=>{ if(await post("create_job",newJob)){setShowCreateJob(false);setNewJob({title:"",department:"",description:"",requirements:"",salary_range:"",location:"Riyadh",employment_type:"full_time"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold hover:bg-violet-600 disabled:opacity-50">{saving?"Saving...":"Create Posting"}</button>
+                <button disabled={saving||!newJob.title||!newJob.department} onClick={async()=>{ if(await post("create_job",newJob)){setShowCreateJob(false);setNewJob({title:"",department:"",department_id:"",paygrade_id:"",description:"",requirements:"",salary_range:"",location:"Riyadh",employment_type:"full_time"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold hover:bg-violet-600 disabled:opacity-50">{saving?"Saving...":"Create Posting"}</button>
                 <button onClick={()=>setShowCreateJob(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
               </div>
             </div>
@@ -408,7 +426,17 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><label className="text-xs text-slate-500">Application ID</label><input value={offerForm.application_id} onChange={e=>setOfferForm({...offerForm,application_id:e.target.value})} placeholder="e.g. 4" className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
                 <div><label className="text-xs text-slate-500">Position *</label><input value={offerForm.position} onChange={e=>setOfferForm({...offerForm,position:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
-                <div><label className="text-xs text-slate-500">Department *</label><input value={offerForm.department} onChange={e=>setOfferForm({...offerForm,department:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
+                <div>
+                  <label className="text-xs text-slate-500">Pay Grade</label>
+                  <select value={offerForm.paygrade_id} onChange={e=>{ 
+                    const g = settingsData.paygrades.find(g=>g.id==e.target.value); 
+                    if(g) setOfferForm({...offerForm, paygrade_id: e.target.value, offered_salary: String(g.min_salary), housing_allowance: String(Math.round(g.min_salary * g.standard_housing_pct / 100)), transport_allowance: String(Math.round(g.min_salary * g.standard_transport_pct / 100))});
+                    else setOfferForm({...offerForm, paygrade_id: e.target.value});
+                  }} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400">
+                    <option value="">Select Grade</option>
+                    {settingsData.paygrades.map(g => <option key={g.id} value={g.id}>{g.grade_name}</option>)}
+                  </select>
+                </div>
                 <div><label className="text-xs text-slate-500">Basic Salary (SAR)</label><input type="number" value={offerForm.offered_salary} onChange={e=>setOfferForm({...offerForm,offered_salary:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
                 <div><label className="text-xs text-slate-500">Housing Allowance</label><input type="number" value={offerForm.housing_allowance} onChange={e=>setOfferForm({...offerForm,housing_allowance:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
                 <div><label className="text-xs text-slate-500">Transport Allowance</label><input type="number" value={offerForm.transport_allowance} onChange={e=>setOfferForm({...offerForm,transport_allowance:e.target.value})} className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"/></div>
@@ -423,7 +451,7 @@ function RecruitmentPanel({ data, offerData, onboardingData, onRefresh }: {
                 Total package: SAR {((Number(offerForm.offered_salary)||0)+(Number(offerForm.housing_allowance)||0)+(Number(offerForm.transport_allowance)||0)).toLocaleString()} / month
               </div>
               <div className="flex gap-2">
-                <button disabled={saving||!offerForm.position||!offerForm.department} onClick={async()=>{ if(await post("create_offer",offerForm)){setShowCreateOffer(false);setOfferForm({application_id:"",position:"",department:"",offered_salary:"",housing_allowance:"",transport_allowance:"",start_date:"",contract_type:"permanent"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold disabled:opacity-50">{saving?"Saving...":"Create Offer"}</button>
+                <button disabled={saving||!offerForm.position||!offerForm.department} onClick={async()=>{ if(await post("create_offer",offerForm)){setShowCreateOffer(false);setOfferForm({application_id:"",position:"",department:"",paygrade_id:"",offered_salary:"",housing_allowance:"",transport_allowance:"",start_date:"",contract_type:"permanent"});} }} className="px-4 py-2 rounded-lg bg-violet-500 text-white text-sm font-semibold disabled:opacity-50">{saving?"Saving...":"Create Offer"}</button>
                 <button onClick={()=>setShowCreateOffer(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
               </div>
             </div>
