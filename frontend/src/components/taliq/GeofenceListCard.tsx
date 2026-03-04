@@ -25,7 +25,7 @@ export function GeofenceListCard({ locations }: { locations: Location[] }) {
         </div>
       </div>
       <div className="divide-y divide-gray-100">
-        {locations.map(loc => (
+        {(locations || []).map(loc => (
           <div key={loc.id} className="px-5 py-3">
             <div className="flex items-center justify-between">
               <div>

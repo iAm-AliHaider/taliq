@@ -74,7 +74,7 @@ export function AuditLogCard({ entries, total }: Props) {
         />
       </div>
       <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-50">
-        {filtered.map((e) => (
+        {(filtered || []).map((e) => (
           <div key={e.id} className="px-5 py-3 hover:bg-gray-50/50 transition-colors">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm">{ICONS[e.entityType] || "📋"}</span>

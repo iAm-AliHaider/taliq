@@ -26,7 +26,7 @@ export function PayrollSummaryCard({ employees, totalGross, totalDeductions, tot
             <th className="text-right px-3 py-2 text-[10px] text-gray-400 uppercase font-semibold">Net</th>
           </tr></thead>
           <tbody className="divide-y divide-gray-50">
-            {employees.map(e => (
+            {(employees || []).map(e => (
               <tr key={e.id} className="hover:bg-gray-50/50">
                 <td className="px-3 py-2">
                   <p className="text-xs font-medium text-gray-900">{e.name}</p>

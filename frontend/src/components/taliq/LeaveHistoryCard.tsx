@@ -56,7 +56,7 @@ export function LeaveHistoryCard({ employeeName, requests = [], onAction }: Leav
       </div>
 
       <div className="divide-y divide-gray-50 max-h-80 overflow-y-auto">
-        {requests.map((req) => {
+        {(requests || []).map((req) => {
           const statusCfg = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
           const typeColor = TYPE_ICONS[req.leave_type] || "bg-gray-100 text-gray-600";
 

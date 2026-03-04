@@ -50,7 +50,7 @@ export function CourseMaterialsCard({ courseTitle, syllabus, materialsUrl, mater
       {materials.length > 0 && (
         <div className="p-4 space-y-2">
           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Resources</h4>
-          {materials.map((m, i) => {
+          {(materials || []).map((m, i) => {
             const t = TYPE_ICON[m.type] || TYPE_ICON.default;
             return (
               <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-all">

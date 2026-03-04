@@ -10,7 +10,7 @@ export function ContractListCard({ title, contracts }: { title: string; contract
         <span className="px-2 py-0.5 rounded-full bg-red-100 text-[10px] font-bold text-red-700">{contracts.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {contracts.map((c, i) => {
+        {(contracts || []).map((c, i) => {
           const days = Math.ceil((new Date(c.endDate).getTime() - Date.now()) / 86400000);
           return (
             <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">

@@ -119,7 +119,7 @@ export default function EmployeeDetailCard(props: Props) {
           <div>
             <p className="text-xs text-gray-400 mb-1">Recent Reviews</p>
             <div className="flex gap-2">
-              {props.reviews.map((r, i) => (
+              {props.(reviews || []).map((r, i) => (
                 <div key={i} className="bg-gray-50 rounded-lg px-3 py-1.5 text-xs">
                   <span className="text-gray-500">{r.period}</span>
                   <span className="ml-2 font-bold text-yellow-600">{"★".repeat(r.rating)}</span>

@@ -36,7 +36,7 @@ export function ApplicationListCard({ applications }: { applications: Applicatio
         </div>
       </div>
       <div className="divide-y divide-gray-100">
-        {applications.map((a) => (
+        {(applications || []).map((a) => (
           <div key={a.ref} className="px-5 py-3 hover:bg-gray-50 transition-colors">
             <div className="flex items-center justify-between">
               <div className="flex-1">

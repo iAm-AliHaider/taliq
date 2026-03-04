@@ -59,14 +59,14 @@ export function DocumentRequestCard({ employeeName, documentType, requestDate, s
         {s.step > 0 && (
           <>
             <div className="flex items-center gap-1">
-              {steps.map((step, i) => (
+              {(steps || []).map((step, i) => (
                 <div key={step} className="flex items-center flex-1">
                   <div className={`w-full h-1.5 rounded-full ${i < s.step ? "bg-emerald-500" : "bg-gray-100"} transition-all duration-500`} />
                 </div>
               ))}
             </div>
             <div className="flex justify-between">
-              {steps.map((step, i) => (
+              {(steps || []).map((step, i) => (
                 <span key={step} className={`text-[9px] ${i < s.step ? "text-emerald-600 font-semibold" : "text-gray-300"}`}>{step}</span>
               ))}
             </div>

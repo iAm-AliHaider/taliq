@@ -34,7 +34,7 @@ export default function PaymentListCard({ payments = [], summary, isAdmin }: { p
         )}
       </div>
       <div className="divide-y divide-gray-50">
-        {payments.map(p => (
+        {(payments || []).map(p => (
           <div key={p.ref} className="px-5 py-3 hover:bg-gray-50/50">
             <div className="flex items-center justify-between">
               <div>

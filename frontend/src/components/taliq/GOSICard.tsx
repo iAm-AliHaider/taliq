@@ -133,7 +133,7 @@ export function GOSICard({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-100">
-        {tabs.map(t => (
+        {(tabs || []).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex-1 py-2 text-[10px] font-semibold transition-all ${
               tab === t.key ? "text-teal-600 border-b-2 border-teal-500 bg-teal-50/50" : "text-gray-400"
@@ -221,7 +221,7 @@ export function GOSICard({
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">Coverage</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {benefits.coverage.map(c => (
+                  {benefits.(coverage || []).map(c => (
                     <span key={c} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[10px] text-emerald-700 font-medium">{c}</span>
                   ))}
                 </div>

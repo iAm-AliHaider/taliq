@@ -1,70 +1,94 @@
-"""Candidate Voice Interview — conducts structured interviews for recruitment pipeline."""
-
 import json
 import logging
-from livekit.agents import function_tool, RunContext
-import database as db
-from tools.core import _send_ui
+import datetime
+import asyncio
+from livekit.agents import FunctionDomain, function_tool
+from .core import _send_ui, _room_ref, _query, get_db
 
-logger = logging.getLogger("taliq-interview")
+logger = logging.getLogger('taliq-tools-interview')
 
-_interview_state: dict = {}
+# Global state for candidate interview session
+_interview_state = {
+    "started": False,
+    "completed": False,
+    "application_id": None,
+    "candidate_name": "",
+    "position": "",
+    "interview_id": None,
+    "questions": [],
+    "current_q": 0,
+    "answers": [],
+    "scores": {
+        "communication": 0,
+        "technical": 0,
+        "culture": 0,
+        "overall": 0
+    }
+}
 
+async def _delayed_disconnect(delay=10):
+    """Wait for TTS to finish then disconnect."""
+    await asyncio.sleep(delay)
+    if _room_ref:
+        logger.info("Automatically disconnecting interview call...")
+        try:
+            await _room_ref.disconnect()
+        except Exception as e:
+            logger.error(f"Disconnect error: {e}")
 
-def _query(sql, params=None, fetch="all"):
-    """Helper: run a query using database.py's get_db pattern."""
-    conn = db.get_db()
-    try:
-        c = conn.cursor()
-        c.execute(sql, params or ())
-        if fetch == "one":
-            result = db._fetchone(c)
-        elif fetch == "all":
-            result = db._fetchall(c)
-        else:
-            result = None
-        conn.commit()
-        return result
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"DB error: {e}")
-        return [] if fetch == "all" else None
-    finally:
-        conn.close()
+def get_candidate_interview_domain():
+    domain = FunctionDomain()
+    domain.add_tool(start_candidate_interview)
+    domain.add_tool(next_interview_question)
+    domain.add_tool(score_candidate_answer)
+    domain.add_tool(complete_candidate_interview)
+    return domain
 
-
-def init_candidate_interview(application_id: int, candidate_name: str, position: str):
-    """Initialize interview state when agent connects in interview mode."""
+@function_tool()
+async def start_candidate_interview(
+    application_id: int,
+    candidate_name: str,
+    position: str,
+    stage: str = "hr_screening"
+):
+    """Initialize a candidate interview session."""
     global _interview_state
+    
+    # Check if already started
+    if _interview_state.get("started"):
+        return f"Interview for {_interview_state['candidate_name']} is already in progress."
 
+    # Fetch questions from bank
     questions = _query(
-        "SELECT id, question, category, max_points, evaluation_criteria, sort_order "
-        "FROM interview_question_banks WHERE stage = 'hr_screening' ORDER BY sort_order"
-    ) or []
-
-    existing = _query(
-        "SELECT id, status FROM candidate_interviews WHERE application_id = %s ORDER BY id DESC LIMIT 1",
-        (application_id,), "one"
+        "SELECT * FROM interview_question_banks WHERE category = %s ORDER BY sort_order",
+        (stage,),
+        True
     )
+    
+    if not questions:
+        # Fallback to general questions
+        questions = [
+            {"id": 1, "question": "Tell me about yourself and your background.", "category": "General", "max_points": 10},
+            {"id": 2, "question": "Why are you interested in this position?", "category": "General", "max_points": 10},
+            {"id": 3, "question": "What are your greatest professional strengths?", "category": "General", "max_points": 10},
+            {"id": 4, "question": "Where do you see yourself in five years?", "category": "General", "max_points": 10},
+        ]
 
-    interview_id = None
-    if existing and existing["status"] == "in_progress":
-        interview_id = existing["id"]
-    elif not existing or existing["status"] != "completed":
-        result = _query(
-            "INSERT INTO candidate_interviews (application_id, ref, position, questions, status, started_at) "
-            "VALUES (%s, %s, %s, %s, 'in_progress', NOW()) RETURNING id",
-            (application_id, f"VINT-{application_id}-voice", position, json.dumps([dict(q) for q in questions])),
-            "one"
-        )
-        if result:
-            interview_id = result["id"]
-        _query(
-            "UPDATE job_applications SET interview_ref = %s WHERE id = %s",
-            (f"VINT-{application_id}-voice", application_id), None
-        )
+    # Create interview record in DB
+    res = _query(
+        "INSERT INTO candidate_interviews (application_id, candidate_name, position, stage, status, total_questions, started_at) "
+        "VALUES (%s, %s, %s, %s, 'in_progress', %s, NOW()) RETURNING id",
+        (application_id, candidate_name, position, stage, len(questions)),
+        True
+    )
+    interview_id = res[0]["id"] if res else None
 
-    _interview_state = {
+    # Ensure application is in interview stage
+    _query("UPDATE job_applications SET stage = 'interview' WHERE id = %s", (application_id,), None)
+
+    _interview_state.update({
+        "started": True,
+        "completed": False,
         "application_id": application_id,
         "candidate_name": candidate_name,
         "position": position,
@@ -72,58 +96,28 @@ def init_candidate_interview(application_id: int, candidate_name: str, position:
         "questions": questions,
         "current_q": 0,
         "answers": [],
-        "scores": {},
-        "started": True,
-        "completed": False,
-    }
+        "scores": {"communication": 0, "technical": 0, "culture": 0, "overall": 0}
+    })
 
-    logger.info(f"Interview initialized for {candidate_name}, {len(questions)} questions, interview_id={interview_id}")
-    return _interview_state
+    await _send_ui("InterviewStarted", {
+        "candidateName": candidate_name,
+        "position": position,
+        "totalQuestions": len(questions)
+    }, "interview_card")
 
-
-def get_interview_system_prompt(candidate_name: str, position: str, questions: list) -> str:
-    q_list = "\n".join([f"  Q{i+1}: {q['question']} (Category: {q['category']}, Max: {q.get('max_points', 10)} pts)" for i, q in enumerate(questions)])
-
-    return f"""You are Taliq, an AI interviewer conducting a structured HR screening interview via voice.
-
-CANDIDATE: {candidate_name}
-POSITION: {position}
-
-QUESTIONS TO ASK (in order):
-{q_list}
-
-CRITICAL FLOW — follow this EXACTLY:
-
-STEP 1: Call next_interview_question immediately. This loads Q1. Then read the question aloud to the candidate.
-STEP 2: WAIT silently for the candidate to answer. Do NOT speak until they finish.
-STEP 3: After the candidate answers, say "Thank you" (1 sentence max), then IMMEDIATELY call score_candidate_answer with your scores.
-STEP 4: After scoring, call next_interview_question to load the next question. Read it aloud.
-STEP 5: Repeat steps 2-4 until all questions are done.
-STEP 6: After the last answer is scored, call complete_candidate_interview.
-
-SCORING GUIDE (1-10 each dimension):
-- communication_score: clarity, structure, confidence
-- relevance_score: how well it answers the question
-- depth_score: specifics, examples, detail
-- summary: 1 sentence about what they said
-
-RULES:
-- ALWAYS call the tools. Never just talk without calling score or next_question.
-- Keep your speech to 1-2 sentences MAX between questions. The candidate should talk more than you.
-- Be warm and professional. Say "Take your time" if they hesitate.
-- Do NOT reveal scores to the candidate.
-- Do NOT ask follow-up questions. Just score what they said and move on.
-
-BEGIN NOW: Call next_interview_question to get the first question."""
-
+    return (
+        f"Interview initialized for {candidate_name} ({position}). "
+        f"I have loaded {len(questions)} questions for the {stage} stage. "
+        "Instructions for AI: Introduce yourself, explain the process, and then call next_interview_question to begin."
+    )
 
 @function_tool()
-async def next_interview_question(context: RunContext):
-    """Move to the next interview question. Call this after scoring the previous answer."""
+async def next_interview_question():
+    """Move to the next interview question."""
     global _interview_state
     state = _interview_state
     if not state.get("started"):
-        return "No interview in progress."
+        return "No interview in progress. Call start_candidate_interview first."
 
     idx = state["current_q"]
     questions = state["questions"]
@@ -144,16 +138,14 @@ async def next_interview_question(context: RunContext):
 
     return f"Question {idx + 1} of {len(questions)}: {q['question']}"
 
-
 @function_tool()
 async def score_candidate_answer(
-    context: RunContext,
     communication_score: int = 5,
     relevance_score: int = 5,
     depth_score: int = 5,
     summary: str = "",
 ):
-    """Score the candidate's answer. communication_score, relevance_score, depth_score are 1-10."""
+    """Score the candidate's answer. Scores are 1-10."""
     global _interview_state
     state = _interview_state
     if not state.get("started"):
@@ -181,18 +173,24 @@ async def score_candidate_answer(
         "summary": summary,
     }
     state["answers"].append(answer_record)
-    state["scores"][f"q_{q['id']}"] = avg_score
-
-    logger.info(f"Scored Q{q_idx+1}: comm={communication_score} rel={relevance_score} depth={depth_score} avg={avg_score}")
 
     remaining = len(state["questions"]) - state["current_q"]
-    if remaining > 0:
-        return f"Scored question {q_idx+1}: {avg_score}/10. Call next_interview_question for the next question."
-    return f"Scored question {q_idx+1}: {avg_score}/10. All questions done — call complete_candidate_interview."
+    
+    # Update DB with progress
+    if state["interview_id"]:
+        _query(
+            "UPDATE candidate_interviews SET current_question = %s, answers = %s WHERE id = %s",
+            (state["current_q"], json.dumps(state["answers"]), state["interview_id"]),
+            None
+        )
 
+    if remaining > 0:
+        return f"Scored question {q_idx+1}: {avg_score}/10. {remaining} questions left. Call next_interview_question for the next one."
+    
+    return f"Scored the final question: {avg_score}/10. All questions done. Call complete_candidate_interview to finish."
 
 @function_tool()
-async def complete_candidate_interview(context: RunContext):
+async def complete_candidate_interview():
     """Complete the interview, calculate final score, and save results."""
     global _interview_state
     state = _interview_state
@@ -210,13 +208,12 @@ async def complete_candidate_interview(context: RunContext):
 
     if state["interview_id"]:
         _query(
-            "UPDATE candidate_interviews SET answers = %s, scores = %s, total_score = %s, "
-            "status = 'completed', completed_at = NOW() WHERE id = %s",
-            (json.dumps(answers), json.dumps(state["scores"]), percentage, state["interview_id"]),
+            "UPDATE candidate_interviews SET answers = %s, total_score = %s, status = 'completed', completed_at = NOW() WHERE id = %s",
+            (json.dumps(answers), percentage, state["interview_id"]),
             None
         )
         _query(
-            "UPDATE job_applications SET interview_score = %s, interview_completed_at = NOW() WHERE id = %s",
+            "UPDATE job_applications SET interview_score = %s, interview_completed_at = NOW(), stage = 'interview' WHERE id = %s",
             (percentage, state["application_id"]),
             None
         )
@@ -233,8 +230,11 @@ async def complete_candidate_interview(context: RunContext):
         "breakdown": [{"question": a["question"][:50], "score": a["average"], "category": a["category"]} for a in answers],
     }, "interview_card")
 
+    # Start a delayed disconnect task
+    asyncio.create_task(_delayed_disconnect(12))
+
     return (
-        f"Interview complete for {state['candidate_name']}. "
-        f"Score: {percentage}%. "
-        f"{'Passed — recommended for next stage.' if passed else 'Below threshold.'}"
+        f"Interview complete for {state['candidate_name']}. Final score: {percentage}%. "
+        f"{'Candidate recommended for next stage.' if passed else 'Performance below threshold.'} "
+        "Inform the candidate that the session is complete and will disconnect automatically. Wish them a good day."
     )

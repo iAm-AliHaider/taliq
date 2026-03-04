@@ -45,7 +45,7 @@ export function DocumentRequestForm({ employeeName, onAction }: Props) {
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block mb-2">Select Document</label>
           <div className="space-y-2">
-            {DOC_TYPES.map(doc => (
+            {(DOC_TYPES || []).map(doc => (
               <button
                 key={doc.value}
                 onClick={() => setSelectedType(doc.value)}

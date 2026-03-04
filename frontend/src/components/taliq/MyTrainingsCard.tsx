@@ -14,7 +14,7 @@ export function MyTrainingsCard({ trainings = [], stats, onAction }: Props) {
         <div className="bg-white p-3 text-center"><p className={`text-lg font-bold ${stats.compliance >= 100 ? "text-emerald-600" : "text-amber-600"}`}>{stats.compliance}%</p><p className="text-[9px] text-gray-400">Compliance</p></div>
       </div>}
       <div className="divide-y divide-gray-50">
-        {trainings.map((t, i) => (
+        {(trainings || []).map((t, i) => (
           <div key={i} className="px-5 py-3.5 flex items-center justify-between">
             <div><p className="text-sm font-medium text-gray-900">{t.title}</p><p className="text-[10px] text-gray-400">{t.duration_hours}h - {t.category} {t.mandatory ? "(mandatory)" : ""}</p>{t.score != null && <p className="text-[10px] text-emerald-600">Score: {t.score}% {t.certificate_ref ? `- ${t.certificate_ref}` : ""}</p>}</div>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${t.status === "completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-blue-50 text-blue-600 border-blue-100"}`}>{t.status}</span>

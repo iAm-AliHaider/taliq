@@ -111,7 +111,7 @@ export function LeaveRequestForm({
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block mb-1.5">Leave Type</label>
           <div className="grid grid-cols-2 gap-2">
-            {LEAVE_TYPES.map(lt => (
+            {(LEAVE_TYPES || []).map(lt => (
               <button
                 key={lt.value}
                 onClick={() => setLeaveType(lt.value)}

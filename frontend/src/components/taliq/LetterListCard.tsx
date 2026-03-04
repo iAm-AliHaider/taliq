@@ -26,7 +26,7 @@ export function LetterListCard({ letters }: { letters: Letter[] }) {
         <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700">{letters.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {letters.map(l => (
+        {(letters || []).map(l => (
           <div key={l.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
             <div>
               <p className="text-sm font-medium text-gray-900">{TYPE_LABELS[l.type] || l.type}</p>

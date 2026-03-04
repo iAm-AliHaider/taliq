@@ -24,7 +24,7 @@ export function ClaimListCard({ claims = [] }: { claims: Claim[] }) {
         </div>
       </div>
       <div className="divide-y divide-gray-50">
-        {claims.map(c => (
+        {(claims || []).map(c => (
           <div key={c.ref} className="px-5 py-3 hover:bg-gray-50/50">
             <div className="flex items-center justify-between">
               <div>

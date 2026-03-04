@@ -86,7 +86,7 @@ export function TravelRequestForm({ employeeName, grade, perDiemRates, currency 
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block mb-2">Destination</label>
           <div className="grid grid-cols-3 gap-1.5 mb-2">
-            {POPULAR_DESTINATIONS.map(d => (
+            {(POPULAR_DESTINATIONS || []).map(d => (
               <button
                 key={d.city}
                 onClick={() => { setDestination(d.city); setCustomDest(""); }}

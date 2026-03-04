@@ -74,7 +74,7 @@ export function LoanApplicationForm({ employeeName, eligible, maxAmount, currenc
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold block mb-1.5">Loan Type</label>
           <div className="space-y-2">
-            {LOAN_TYPES.map(lt => (
+            {(LOAN_TYPES || []).map(lt => (
               <button
                 key={lt.value}
                 onClick={() => {

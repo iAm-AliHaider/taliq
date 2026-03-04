@@ -13,7 +13,7 @@ export function RecruitmentDashboardCard({ jobs, applications }: Props) {
     { label: "Hired", count: applications?.hired || 0, color: "bg-emerald-500", lightColor: "bg-emerald-50 text-emerald-700" },
     { label: "Rejected", count: applications?.rejected || 0, color: "bg-red-400", lightColor: "bg-red-50 text-red-600" },
   ];
-  const maxCount = Math.max(...funnelStages.map(s => s.count), 1);
+  const maxCount = Math.max(...(funnelStages || []).map(s => s.count), 1);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out]">
@@ -40,7 +40,7 @@ export function RecruitmentDashboardCard({ jobs, applications }: Props) {
         <div>
           <p className="text-[10px] text-gray-400 uppercase font-semibold mb-3">Hiring Funnel</p>
           <div className="space-y-2">
-            {funnelStages.map(s => (
+            {(funnelStages || []).map(s => (
               <div key={s.label} className="flex items-center gap-3">
                 <span className="text-[10px] text-gray-500 w-16">{s.label}</span>
                 <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">

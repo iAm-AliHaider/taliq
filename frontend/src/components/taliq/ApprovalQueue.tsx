@@ -27,7 +27,7 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
     setProcessingId(item.id);
     onAction?.("approve_leave", { request_id: item.id, decision });
     setTimeout(() => {
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: decision } : i));
+      setItems(prev => (prev || []).map(i => i.id === item.id ? { ...i, status: decision } : i));
       setProcessingId(null);
     }, 600);
   };
@@ -50,7 +50,7 @@ export function ApprovalQueue({ items: initialItems, onAction }: Props) {
             </div>
             <p className="text-sm text-gray-400">All caught up!</p>
           </div>
-        ) : items.map((item) => {
+        ) : (items || []).map((item) => {
           const isExpanded = expandedId === item.id;
           const isProcessing = processingId === item.id;
 

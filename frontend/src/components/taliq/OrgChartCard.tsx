@@ -62,7 +62,7 @@ function OrgNode({ emp, employees }: { emp: Employee; employees: Employee[] }) {
   }
   return (
     <TreeNode label={<NodeCard emp={emp} />}>
-      {reports.map((r) => (
+      {(reports || []).map((r) => (
         <OrgNode key={r.id} emp={r} employees={employees} />
       ))}
     </TreeNode>
@@ -88,7 +88,7 @@ export function OrgChartCard({ employees }: { employees: Employee[] }) {
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-[slideUp_0.2s_ease-out]">
       <div className="px-5 py-4 bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple-100">
         <h3 className="text-sm font-bold text-gray-900">Organization Chart</h3>
-        <p className="text-[10px] text-gray-400 mt-0.5">{employees.length} employees across {[...new Set(employees.map((e) => e.department))].length} departments</p>
+        <p className="text-[10px] text-gray-400 mt-0.5">{employees.length} employees across {[...new Set((employees || []).map((e) => e.department))].length} departments</p>
       </div>
       <div className="p-6 overflow-x-auto">
         <Tree
@@ -98,10 +98,10 @@ export function OrgChartCard({ employees }: { employees: Employee[] }) {
           nodePadding="8px"
           label={<NodeCard emp={root} isRoot />}
         >
-          {reports.map((r) => (
+          {(reports || []).map((r) => (
             <OrgNode key={r.id} emp={r} employees={employees} />
           ))}
-          {otherRoots.map((r) => (
+          {(otherRoots || []).map((r) => (
             <OrgNode key={r.id} emp={r} employees={employees} />
           ))}
         </Tree>

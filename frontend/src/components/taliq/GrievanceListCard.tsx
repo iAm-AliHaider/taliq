@@ -12,7 +12,7 @@ export function GrievanceListCard({ grievances = [], mode, onAction }: Props) {
         <button onClick={() => onAction?.("file_grievance", {})} className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-[10px] font-semibold text-red-600 hover:bg-red-100">File New</button>
       </div>
       <div className="divide-y divide-gray-50">
-        {grievances.map((g, i) => { const sev = SEV[g.severity] || SEV.medium; const stat = STAT[g.status] || STAT.submitted; return (
+        {(grievances || []).map((g, i) => { const sev = SEV[g.severity] || SEV.medium; const stat = STAT[g.status] || STAT.submitted; return (
           <div key={i} className="px-5 py-4">
             <div className="flex items-start justify-between gap-3">
               <div><p className="text-sm font-medium text-gray-900">{g.subject}</p><p className="text-[10px] text-gray-400">{g.ref} - {g.category} - {g.submitted_at?.slice(0, 10)}</p>{g.description && <p className="text-[10px] text-gray-500 mt-1">{g.description}</p>}{g.resolution && <p className="text-[10px] text-emerald-600 mt-1">Resolution: {g.resolution}</p>}</div>

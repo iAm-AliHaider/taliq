@@ -34,14 +34,14 @@ export function NotificationQueueCard({ notifications, total, onAction }: Props)
           <p className="text-xs text-gray-500 mt-0.5">{total} pending delivery</p>
         </div>
         <button
-          onClick={() => onAction?.("deliver_all_notifications", { ids: notifications.map((n) => n.id) })}
+          onClick={() => onAction?.("deliver_all_notifications", { ids: (notifications || []).map((n) => n.id) })}
           className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold hover:bg-emerald-600 active:scale-95 transition-all"
         >
           Deliver All
         </button>
       </div>
       <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-50">
-        {notifications.map((n) => (
+        {(notifications || []).map((n) => (
           <div key={n.id} className="px-5 py-3 hover:bg-gray-50/50 transition-colors">
             <div className="flex items-center gap-2 mb-1">
               <span

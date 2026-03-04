@@ -94,7 +94,7 @@ export function ManagerDashboard({ managerName, department, stats, team, activeT
 
         {tab === "team" && team && (
           <div className="space-y-3">
-            {team.map((member) => (
+            {(team || []).map((member) => (
               <div
                 key={member.id}
                 className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors"

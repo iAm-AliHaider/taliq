@@ -27,7 +27,7 @@ export function ClaimForm({ prefill, onAction }: { prefill?: { claimType?: strin
         <div>
           <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1.5">Claim Type</label>
           <div className="flex flex-wrap gap-1.5">
-            {CLAIM_TYPES.map(t => (
+            {(CLAIM_TYPES || []).map(t => (
               <button key={t} onClick={() => setClaimType(t)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 active:scale-95 ${
                   claimType === t ? "bg-violet-500 text-white shadow-sm" : "bg-gray-50 text-gray-600 border border-gray-200 hover:border-violet-200"

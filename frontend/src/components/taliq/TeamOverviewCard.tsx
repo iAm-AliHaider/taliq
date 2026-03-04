@@ -77,7 +77,7 @@ export function TeamOverviewCard({ managerName, team = [], onAction }: TeamOverv
       {/* Team grid */}
       <div className="p-4">
         <div className="grid grid-cols-2 gap-3">
-          {team.map((member, idx) => {
+          {(team || []).map((member, idx) => {
             const status = STATUS_CONFIG[member.status] || STATUS_CONFIG.unknown;
             const colorClass = AVATAR_COLORS[idx % AVATAR_COLORS.length];
 

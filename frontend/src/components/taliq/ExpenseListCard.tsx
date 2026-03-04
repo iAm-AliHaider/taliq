@@ -32,7 +32,7 @@ export function ExpenseListCard({ expenses = [], summary }: { expenses: Expense[
         )}
       </div>
       <div className="divide-y divide-gray-50">
-        {expenses.map(e => (
+        {(expenses || []).map(e => (
           <div key={e.ref} className="px-5 py-3 hover:bg-gray-50/50">
             <div className="flex items-center justify-between">
               <div>

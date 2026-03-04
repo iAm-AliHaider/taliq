@@ -93,7 +93,7 @@ export function SalaryBreakdownCard({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-100">
-        {tabs.map(tab => (
+        {(tabs || []).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`flex-1 py-2.5 text-xs font-semibold transition-all ${
               activeTab === tab.key ? "text-blue-600 border-b-2 border-blue-500 bg-blue-50/50" : "text-gray-400 hover:text-gray-600"
@@ -127,7 +127,7 @@ export function SalaryBreakdownCard({
               </div>
               <div className="rounded-xl border border-gray-100 divide-y divide-gray-50">
                 <Row label={`GOSI (${gosiRate}%)`} amount={-gosiAmount} currency={currency} sub="Social insurance" />
-                {loanDeductions.map(loan => (
+                {(loanDeductions || []).map(loan => (
                   <Row key={loan.ref} label={`Loan EMI · ${loan.ref}`} amount={-loan.emi} currency={currency}
                     sub={`${loan.type} · ${fmt(loan.remaining)} remaining`} />
                 ))}

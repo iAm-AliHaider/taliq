@@ -10,7 +10,7 @@ export function TeamShiftCard({ members }: { members: Member[] }) {
         <span className="px-2 py-0.5 rounded-full bg-amber-100 text-[10px] font-bold text-amber-700">{members.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {members.map(m => (
+        {(members || []).map(m => (
           <div key={m.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">

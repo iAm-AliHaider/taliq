@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (section === "interviews") {
-      const interviews = await sql`SELECT * FROM interviews ORDER BY started_at DESC`;
+      const interviews = await sql`SELECT * FROM candidate_interviews ORDER BY started_at DESC`;
       const templates = await sql`SELECT * FROM interview_templates ORDER BY created_at DESC`;
       return NextResponse.json({ interviews: interviews, templates: (templates as any[]).map((t: any) => ({ ...t, questions: typeof t.questions === 'string' ? JSON.parse(t.questions) : t.questions })) });
     }
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
 
     if (section === "workflows") {
       const workflows = await sql`SELECT * FROM approval_workflows ORDER BY name`;
-      const requests = await sql`SELECT ar.*, aw.name as workflow_name, aw.description as workflow_desc FROM approval_requests ar JOIN approval_workflows aw ON ar.workflow_id = aw.id ORDER BY ar.created_at DESC LIMIT 50`;
+      const requests = await sql`SELECT ar.*, aw.name as workflow_name, aw.description as workflow_desc FROM approval_requests arm JOIN approval_workflows aw ON ar.workflow_id = aw.id ORDER BY ar.created_at DESC LIMIT 50`;
       return NextResponse.json({ workflows, requests });
     }
 
@@ -408,10 +408,10 @@ export async function POST(request: NextRequest) {
 
     if (action === "create_interview") {
       const { candidate_name, position, stage } = body;
-      const count = await sql`SELECT COUNT(*) as c FROM interviews`;
+      const count = await sql`SELECT COUNT(*) as c FROM candidate_interviews`;
       const ref = `INT-2026-${String(Number((count as any[])[0].c) + 1).padStart(3, '0')}`;
-      await sql`INSERT INTO interviews (ref, candidate_name, position, interviewer_id, stage, total_questions, status)
-        VALUES (${ref}, ${candidate_name}, ${position}, 'E005', ${stage || 'hr_screening'}, 5, 'in_progress')`;
+      await sql`INSERT INTO candidate_interviews (application_id, candidate_name, position, stage, total_questions, status)
+        VALUES (NULL, ${candidate_name}, ${position}, ${stage || 'hr_screening'}, 5, 'in_progress')`;
           await audit(body.actor_id || "system", "create", "interview", String(''), `interview: ${body.candidate_name}`);
       return NextResponse.json({ ok: true, ref });
     }

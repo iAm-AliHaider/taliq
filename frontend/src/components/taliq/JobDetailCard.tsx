@@ -65,7 +65,7 @@ export function JobDetailCard(props: Props) {
             ))}
           </div>
           <div className="flex justify-between mt-1">
-            {stages.map(s => (
+            {(stages || []).map(s => (
               <span key={s.label} className="text-[8px] text-gray-400">{s.label} ({s.count})</span>
             ))}
           </div>

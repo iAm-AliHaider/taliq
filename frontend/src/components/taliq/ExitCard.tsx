@@ -58,7 +58,7 @@ export function ExitCard(props: Props) {
             <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${total > 0 ? (cleared / total) * 100 : 0}%` }} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {clearanceEntries.map(([key, val]) => (
+            {(clearanceEntries || []).map(([key, val]) => (
               <div key={key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${val === "cleared" ? "bg-emerald-50 border-emerald-200" : "bg-gray-50 border-gray-200"}`}>
                 <div className={`w-4 h-4 rounded-full flex items-center justify-center ${val === "cleared" ? "bg-emerald-500" : "bg-gray-300"}`}>
                   {val === "cleared" && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}

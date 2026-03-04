@@ -34,7 +34,7 @@ export function PendingApprovalsCard({ approvals }: { approvals: Approval[] }) {
         </div>
       </div>
       <div className="divide-y divide-gray-100">
-        {approvals.map(a => (
+        {(approvals || []).map(a => (
           <div key={a.ref} className="px-5 py-3 hover:bg-amber-50/50 transition-colors">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">

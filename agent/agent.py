@@ -18,6 +18,10 @@ Modular architecture:
 
 import json
 import logging
+
+# Suppress OpenAI TTS request_id warnings
+import logging
+logging.getLogger("livekit.plugins.openai.tts").setLevel(logging.ERROR)
 import os
 import asyncio
 from dotenv import load_dotenv

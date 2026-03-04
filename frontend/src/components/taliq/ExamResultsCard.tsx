@@ -53,7 +53,7 @@ export function ExamResultsCard({ examTitle, score = 0, passed = false, passingS
 
       {/* Question review */}
       <div className="divide-y divide-gray-50">
-        {results.map((r, i) => (
+        {(results || []).map((r, i) => (
           <div key={i} className="px-5 py-4">
             <div className="flex items-start gap-3">
               <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${r.correct ? "bg-emerald-100" : "bg-red-100"}`}>

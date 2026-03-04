@@ -100,7 +100,7 @@ export function ExamCard({ examId, examTitle, description, passingScore = 70, ti
 
           {/* Options */}
           <div className="space-y-2 ml-11">
-            {q.options.map((opt, i) => {
+            {q.(options || []).map((opt, i) => {
               const selected = answers[String(q.id)] === opt;
               return (
                 <button key={i} onClick={() => setAnswers(prev => ({...prev, [String(q.id)]: opt}))}
@@ -120,7 +120,7 @@ export function ExamCard({ examId, examTitle, description, passingScore = 70, ti
 
       {/* Question nav dots */}
       <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-center gap-1.5 flex-wrap">
-        {questions.map((qq, i) => (
+        {(questions || []).map((qq, i) => (
           <button key={i} onClick={() => setCurrentQ(i)}
             className={`w-7 h-7 rounded-full text-[10px] font-bold transition-all ${i === currentQ ? "bg-blue-500 text-white" : answers[String(qq.id)] ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}>
             {i + 1}

@@ -54,7 +54,7 @@ export function AttendanceDashboard({ managerName, date, team }: Props) {
 
       {/* List */}
       <div className="divide-y divide-gray-50">
-        {team.map((m, i) => {
+        {(team || []).map((m, i) => {
           const sc = statusConfig[m.status] || statusConfig.absent;
           return (
             <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors">

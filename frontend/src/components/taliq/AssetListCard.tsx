@@ -12,7 +12,7 @@ export function AssetListCard({ assets }: { assets: Asset[] }) {
         <span className="px-2 py-0.5 rounded-full bg-cyan-100 text-[10px] font-bold text-cyan-700">{assets.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {assets.map(a => (
+        {(assets || []).map(a => (
           <div key={a.ref} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/50">
             <div className="w-9 h-9 rounded-lg bg-cyan-50 border border-cyan-100 flex items-center justify-center flex-shrink-0">
               <svg className="w-4 h-4 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={ICONS[a.type] || ICONS.laptop} /></svg>

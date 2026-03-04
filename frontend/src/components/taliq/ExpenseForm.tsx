@@ -29,7 +29,7 @@ export function ExpenseForm({ categories, prefill, onAction }: { categories?: st
         <div>
           <label className="text-[10px] text-gray-400 uppercase font-semibold block mb-1.5">Category</label>
           <div className="flex flex-wrap gap-1.5">
-            {cats.map(c => (
+            {(cats || []).map(c => (
               <button key={c} onClick={() => setCategory(c)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 active:scale-95 ${
                   category === c ? "bg-orange-500 text-white shadow-sm" : "bg-gray-50 text-gray-600 border border-gray-200 hover:border-orange-200"

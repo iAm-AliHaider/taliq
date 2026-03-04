@@ -58,7 +58,7 @@ export function InterviewPanel({ title, candidateName, currentQuestion, totalQue
           <div>
             <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Scores</span>
             <div className="flex gap-2 mt-2 flex-wrap">
-              {scores.map((s, i) => (
+              {(scores || []).map((s, i) => (
                 <div key={i} className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold ${
                   s >= 4 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
                   s >= 3 ? "bg-amber-50 text-amber-700 border border-amber-200" :

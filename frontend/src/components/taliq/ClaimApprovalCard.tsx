@@ -13,7 +13,7 @@ export function ClaimApprovalCard({ claims = [], onAction }: { claims: PendingCl
         <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200">{claims.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {claims.map(c => (
+        {(claims || []).map(c => (
           <div key={c.ref} className="px-5 py-3">
             <div className="flex items-center justify-between">
               <div>

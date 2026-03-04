@@ -15,7 +15,7 @@ export function IqamaVisaCard({ documents }: { documents: Doc[] }) {
         <span className="px-2 py-0.5 rounded-full bg-teal-100 text-[10px] font-bold text-teal-700">{documents.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {documents.map(d => {
+        {(documents || []).map(d => {
           const daysLeft = Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / 86400000);
           const isExpiring = daysLeft <= 90 && daysLeft > 0;
           const isExpired = daysLeft <= 0;

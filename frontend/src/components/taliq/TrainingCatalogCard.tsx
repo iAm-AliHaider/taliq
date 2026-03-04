@@ -11,7 +11,7 @@ export function TrainingCatalogCard({ courses = [], onAction }: Props) {
         {mandatory.length > 0 && <span className="px-2 py-1 rounded-full bg-red-50 border border-red-100 text-[10px] font-semibold text-red-600">{mandatory.length} mandatory</span>}
       </div>
       <div className="p-4 grid grid-cols-1 gap-3">
-        {courses.map(c => { const cat = CAT_CLR[c.category] || CAT_CLR.general; return (
+        {(courses || []).map(c => { const cat = CAT_CLR[c.category] || CAT_CLR.general; return (
           <div key={c.id} className="p-4 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div><p className="text-sm font-medium text-gray-900">{c.title}</p>{c.description && <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2">{c.description}</p>}</div>

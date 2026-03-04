@@ -13,7 +13,7 @@ export function DirectoryCard({ employees, query }: { employees: Employee[]; que
         <span className="px-2 py-0.5 rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">{employees.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {employees.map(e => (
+        {(employees || []).map(e => (
           <div key={e.id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50/50">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
               <span className="text-white text-xs font-bold">{e.name.split(" ").map(n => n[0]).join("")}</span>

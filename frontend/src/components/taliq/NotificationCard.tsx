@@ -10,7 +10,7 @@ export function NotificationCard({ notifications = [], unreadCount = 0, onAction
         {unreadCount > 0 && <span className="px-2.5 py-1 rounded-full bg-red-50 border border-red-100 text-[10px] font-bold text-red-600">{unreadCount} new</span>}
       </div>
       <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-        {notifications.map((n, i) => { const tc = TYPE_CLR[n.type] || { bg: "bg-gray-50 text-gray-600", icon: "NT" }; return (
+        {(notifications || []).map((n, i) => { const tc = TYPE_CLR[n.type] || { bg: "bg-gray-50 text-gray-600", icon: "NT" }; return (
           <div key={i} className={`px-5 py-3.5 flex items-start gap-3 ${n.read ? "opacity-60" : ""} hover:bg-gray-50/50 transition-colors`}>
             <div className={`w-8 h-8 rounded-lg ${tc.bg} flex items-center justify-center flex-shrink-0`}><span className="text-[9px] font-bold">{tc.icon}</span></div>
             <div className="flex-1 min-w-0">

@@ -19,7 +19,7 @@ export default function TeamTrainingCard({ employees }: { employees: Employee[] 
         <h3 className="text-lg font-semibold text-gray-900">Training Compliance</h3>
       </div>
       <div className="divide-y divide-gray-50">
-        {employees.map(emp => (
+        {(employees || []).map(emp => (
           <div key={emp.employeeId} className="p-4 flex items-center justify-between">
             <div className="flex-1">
               <p className="font-medium text-gray-900 text-sm">{emp.name}</p>

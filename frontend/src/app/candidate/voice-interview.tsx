@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useVoiceAssistant } from "@livekit/components-react";
-import { ConnectionState } from "livekit-client";
+import { LiveKitRoom, RoomAudioRenderer, useConnectionState, useVoiceAssistant, useRoomContext } from "@livekit/components-react";
+import { ConnectionState, RoomEvent } from "livekit-client";
 import { getLiveKitUrl } from "@/lib/livekit-config";
 
 interface VoiceInterviewProps {
@@ -22,9 +22,36 @@ function InterviewSession({ candidateName, position, onComplete }: { candidateNa
   const [interviewResult, setInterviewResult] = useState<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
+  const room = useRoomContext();
   const connected = connState === ConnectionState.Connected;
   const agentSpeaking = agentState === "speaking";
   const userSpeaking = agentState === "listening";
+
+  // Listen for data channel messages (UI cards from agent)
+  useEffect(() => {
+    if (!room) return;
+    const handler = (payload: Uint8Array) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload));
+        if (msg.type === "ui_update") {
+          const data = msg.data || {};
+          if (msg.component === "InterviewQuestion") {
+            setCurrentQuestion(data);
+          } else if (msg.component === "InterviewComplete") {
+            setInterviewResult(data);
+            // Automatically disconnect after 10 seconds to allow final speech to finish
+            setTimeout(() => {
+              if (room.state === ConnectionState.Connected) {
+                room.disconnect();
+              }
+            }, 10000);
+          }
+        }
+      } catch {}
+    };
+    room.on(RoomEvent.DataReceived, handler);
+    return () => { room.off(RoomEvent.DataReceived, handler); };
+  }, [room]);
 
   useEffect(() => {
     if (connected) {
@@ -37,17 +64,54 @@ function InterviewSession({ candidateName, position, onComplete }: { candidateNa
 
   if (interviewResult) {
     return (
-      <div className="text-center py-6 space-y-4">
-        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto ${interviewResult.passed ? "bg-emerald-100" : "bg-amber-100"}`}>
-          {interviewResult.passed ? (
-            <svg className="w-8 h-8 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-          ) : (
-            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01" /></svg>
-          )}
+      <div className="py-2 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="text-center space-y-2">
+          <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-opacity-10 rotate-3 ${interviewResult.passed ? "bg-emerald-500 shadow-emerald-200" : "bg-amber-500 shadow-amber-200"}`}>
+            {interviewResult.passed ? (
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+            ) : (
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4m0 4h.01" /></svg>
+            )}
+          </div>
+          <h4 className="text-2xl font-black text-slate-900 leading-tight">Interview Complete</h4>
+          <p className="text-sm text-slate-500 font-medium">Results for {interviewResult.candidateName}</p>
         </div>
-        <p className="text-3xl font-black" style={{ color: interviewResult.passed ? "#059669" : "#d97706" }}>{interviewResult.score}%</p>
-        <p className="text-sm text-slate-500">{interviewResult.passed ? "Congratulations! You passed." : "Thank you for completing the interview."}</p>
-        <button onClick={onComplete} className="px-6 py-2.5 rounded-xl bg-emerald-500 text-white font-semibold text-sm hover:bg-emerald-600">Back to Portal</button>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Final Score</p>
+            <p className={`text-3xl font-black ${interviewResult.passed ? "text-emerald-600" : "text-amber-600"}`}>{interviewResult.score}%</p>
+          </div>
+          <div className="bg-slate-50 rounded-2xl p-4 text-center border border-slate-100">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Recommendation</p>
+            <p className={`text-sm font-bold mt-2 ${interviewResult.passed ? "text-emerald-700" : "text-amber-700"}`}>{interviewResult.passed ? "PROCEED" : "HOLD"}</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-100 p-4 space-y-3 shadow-sm">
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Performance Breakdown</p>
+          {(interviewResult.breakdown || []).map((b: any, i: number) => (
+            <div key={i} className="flex items-center justify-between group">
+              <div className="flex-1 pr-4">
+                <p className="text-xs font-bold text-slate-700 truncate">{b.question}</p>
+                <p className="text-[9px] text-slate-400">{b.category}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${b.score >= 8 ? "bg-emerald-400" : b.score >= 6 ? "bg-amber-400" : "bg-red-400"}`} style={{ width: `${b.score * 10}%` }} />
+                </div>
+                <span className="text-[10px] font-black text-slate-600 w-4">{b.score}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center">
+          <p className="text-[10px] text-slate-400 mb-4 italic">Call disconnected. Your responses have been saved.</p>
+          <button onClick={onComplete} className="w-full py-3 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all active:scale-[0.98]">
+            Finish & Exit
+          </button>
+        </div>
       </div>
     );
   }

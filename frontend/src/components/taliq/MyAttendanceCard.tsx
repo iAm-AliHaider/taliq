@@ -103,7 +103,7 @@ export function MyAttendanceCard({ employeeName, records = [], today, days = 7, 
 
       {/* Records list */}
       <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
-        {records.map((r, i) => (
+        {(records || []).map((r, i) => (
           <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
             <div className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${STATUS_DOT[r.status] || "bg-gray-400"}`} />

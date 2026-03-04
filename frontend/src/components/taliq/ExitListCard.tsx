@@ -10,7 +10,7 @@ export function ExitListCard({ exits }: { exits: Exit[] }) {
         <span className="px-2 py-0.5 rounded-full bg-red-100 text-[10px] font-bold text-red-700">{exits.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {exits.map(e => (
+        {(exits || []).map(e => (
           <div key={e.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
             <div>
               <p className="text-sm font-medium text-gray-900">{e.employeeName}</p>

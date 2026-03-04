@@ -36,7 +36,7 @@ export default function TeamPerformanceCard({ employees }: { employees: Employee
       </div>
 
       <div className="divide-y divide-gray-50">
-        {employees.map(emp => {
+        {(employees || []).map(emp => {
           const goalPct = emp.goalsTotal > 0 ? Math.round(emp.goalsCompleted / emp.goalsTotal * 100) : 0;
           const attPct = emp.attendanceDays > 0 ? Math.round(emp.attendancePresent / emp.attendanceDays * 100) : 0;
 

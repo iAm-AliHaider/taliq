@@ -34,7 +34,7 @@ export function JobListCard({ jobs }: { jobs: Job[] }) {
         </div>
       </div>
       <div className="divide-y divide-gray-100">
-        {jobs.map((j) => (
+        {(jobs || []).map((j) => (
           <div key={j.ref} className="px-5 py-3 hover:bg-gray-50 transition-colors">
             <div className="flex items-start justify-between">
               <div className="flex-1">

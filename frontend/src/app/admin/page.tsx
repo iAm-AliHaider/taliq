@@ -13,6 +13,8 @@ import OrgChart from "./org-chart";
 import WorkflowBuilder from "./workflow-builder";
 import InterviewBuilder from "./interview-builder";
 import dynamic from "next/dynamic";
+import DashboardCharts from "./dashboard-charts";
+import FileUploads from "./file-uploads";
 const RechartsBarChart = dynamic(() => import("recharts").then(m => {
   const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } = m;
   return function ChartPanel({ departments, nationalities, leaveStats }: any) {
@@ -561,6 +563,8 @@ export default function AdminPage() {
   const [offerData, setOfferData] = useState<any>(null);
   const [onboardingData, setOnboardingData] = useState<any>(null);
   const [geofenceData, setGeofenceData] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [uploadsData, setUploadsData] = useState<any>(null);
   const [workflowData, setWorkflowData] = useState<any>(null);
   const [trainingData, setTrainingData] = useState<any>(null);
   const [showCreateCourse, setShowCreateCourse] = useState(false);
@@ -787,6 +791,7 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
+            <DashboardCharts data={dashboardData} />
           </div>
         )}
 
@@ -960,30 +965,37 @@ export default function AdminPage() {
 
         {/* DOCUMENTS */}
         {tab === "Documents" && (
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-semibold text-gray-800">Document Requests</h3></div>
-            <div className="divide-y divide-gray-50">
-              {documents.map(d => (
-                <div key={d.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{d.employeeName}</p>
-                    <p className="text-[10px] text-gray-400">{d.ref} - {d.documentType}</p>
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-gray-100"><h3 className="text-sm font-semibold text-gray-800">Document Requests (Approvals)</h3></div>
+              <div className="divide-y divide-gray-50">
+                {documents.map(d => (
+                  <div key={d.ref} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{d.employeeName}</p>
+                      <p className="text-[10px] text-gray-400">{d.ref} - {d.documentType}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={d.status} />
+                      {d.status !== "ready" && d.status !== "rejected" && (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleApprove("document", d.ref, "ready")}
+                            className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600">Ready</button>
+                          <button onClick={() => handleApprove("document", d.ref, "rejected")}
+                            className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] text-red-600">Reject</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={d.status} />
-                    {d.status !== "ready" && d.status !== "rejected" && (
-                      <div className="flex gap-1">
-                        <button onClick={() => handleApprove("document", d.ref, "ready")}
-                          className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] text-emerald-600">Ready</button>
-                        <button onClick={() => handleApprove("document", d.ref, "rejected")}
-                          className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] text-red-600">Reject</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {documents.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No document requests</div>}
+                ))}
+                {documents.length === 0 && <div className="px-5 py-8 text-center text-gray-400 text-sm">No document requests</div>}
+              </div>
             </div>
+            <FileUploads
+              data={uploadsData}
+              employees={employees}
+              onRefresh={() => adminFetch("section=uploads").then(d => d && setUploadsData(d))}
+            />
           </div>
         )}
 

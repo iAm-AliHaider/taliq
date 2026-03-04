@@ -47,11 +47,11 @@ export function TrainingCalendarCard({ trainings = [], upcoming = [], onAction }
       <div className="p-4">
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1 mb-1">
-          {DAYS.map(d => <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">{d}</div>)}
+          {(DAYS || []).map(d => <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">{d}</div>)}
         </div>
         {/* Calendar grid */}
         <div className="grid grid-cols-7 gap-1">
-          {cells.map((day, i) => {
+          {(cells || []).map((day, i) => {
             if (day === null) return <div key={`empty-${i}`} className="h-16" />;
             const dayTrainings = trainingDays.get(day) || [];
             const isToday = day === now.getDate();
@@ -75,7 +75,7 @@ export function TrainingCalendarCard({ trainings = [], upcoming = [], onAction }
         <div className="border-t border-gray-100 p-4">
           <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Upcoming</h4>
           <div className="space-y-2">
-            {upcoming.map((t, i) => (
+            {(upcoming || []).map((t, i) => (
               <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{t.title}</p>

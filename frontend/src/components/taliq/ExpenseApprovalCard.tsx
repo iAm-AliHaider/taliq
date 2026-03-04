@@ -13,7 +13,7 @@ export function ExpenseApprovalCard({ expenses = [], onAction }: { expenses: Pen
         <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold border border-amber-200">{expenses.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {expenses.map(e => (
+        {(expenses || []).map(e => (
           <div key={e.ref} className="px-5 py-3">
             <div className="flex items-center justify-between">
               <div>

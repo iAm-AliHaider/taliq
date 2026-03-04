@@ -21,7 +21,7 @@ export default function HeadcountCard({ departments, total }: Props) {
       <div className="p-4">
         {/* Stacked bar */}
         <div className="h-6 rounded-full overflow-hidden flex mb-4">
-          {departments.map((d, i) => (
+          {(departments || []).map((d, i) => (
             <div key={d.department} className={`${deptColors[i % deptColors.length]} transition-all`}
               style={{ width: `${d.percentage}%` }}
               title={`${d.department}: ${d.count}`} />
@@ -29,7 +29,7 @@ export default function HeadcountCard({ departments, total }: Props) {
         </div>
         {/* Legend */}
         <div className="space-y-2">
-          {departments.map((d, i) => (
+          {(departments || []).map((d, i) => (
             <div key={d.department} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className={`w-3 h-3 rounded-full ${deptColors[i % deptColors.length]}`} />

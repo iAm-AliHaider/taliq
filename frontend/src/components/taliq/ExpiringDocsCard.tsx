@@ -10,7 +10,7 @@ export function ExpiringDocsCard({ documents }: { documents: Doc[] }) {
         <span className="px-2 py-0.5 rounded-full bg-red-100 text-[10px] font-bold text-red-700">{documents.length}</span>
       </div>
       <div className="divide-y divide-gray-50">
-        {documents.map((d, i) => {
+        {(documents || []).map((d, i) => {
           const days = Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / 86400000);
           return (
             <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50/50">

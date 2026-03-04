@@ -33,7 +33,7 @@ export function LeaveBalanceCard({ employeeName, annual, sick, emergency, study,
       </div>
 
       <div className="p-5 space-y-4">
-        {leaves.map((leave) => (
+        {(leaves || []).map((leave) => (
           <div key={leave.label} className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${leave.bgColor} flex items-center justify-center`}>
               <span className={`text-lg font-bold ${leave.textColor}`}>{leave.value}</span>

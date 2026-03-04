@@ -54,7 +54,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
 
       {/* Tab bar */}
       <div className="flex overflow-x-auto border-b bg-gray-50 px-2 gap-1 py-1">
-        {TABS.map(t => (
+        {(TABS || []).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -71,7 +71,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
       </div>
 
       <div className="p-4 max-h-80 overflow-y-auto space-y-3">
-        {tab === "leave" && props.leaveRequests.map(r => (
+        {tab === "leave" && props.(leaveRequests || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -82,7 +82,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "loan" && props.loanRequests.map(r => (
+        {tab === "loan" && props.(loanRequests || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -92,7 +92,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "travel" && props.travelRequests.map(r => (
+        {tab === "travel" && props.(travelRequests || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -102,7 +102,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "overtime" && props.overtimeRequests.map(r => (
+        {tab === "overtime" && props.(overtimeRequests || []).map(r => (
           <div key={r.id} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -113,7 +113,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "document" && props.documentRequests.map(r => (
+        {tab === "document" && props.(documentRequests || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -123,7 +123,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "grievance" && props.grievances.map(r => (
+        {tab === "grievance" && props.(grievances || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl">
             <div className="flex items-center justify-between">
               <p className="font-medium text-gray-900 text-sm">{r.employeeName}</p>
@@ -134,7 +134,7 @@ export default function ManagerPendingCard(props: ManagerPendingCardProps) {
           </div>
         ))}
 
-        {tab === "review" && props.pendingReviews.map(r => (
+        {tab === "review" && props.(pendingReviews || []).map(r => (
           <div key={r.employeeId} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 text-sm">{r.name}</p>
