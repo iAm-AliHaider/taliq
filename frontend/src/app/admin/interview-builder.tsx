@@ -292,6 +292,47 @@ export default function InterviewBuilder({ interviews, templates, onRefresh }: P
         </div>
       )}
 
+      
+      {/* OFFER DRAFT MODAL */}
+      {offerDraft && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-white">
+              <h2 className="text-lg font-black text-slate-800">Generate Offer</h2>
+              <p className="text-xs text-slate-500">For {offerDraft.candidate_name} ({offerDraft.position})</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Basic Salary (SAR)</label>
+                   <input type="number" value={offerForm.salary} onChange={e => setOfferForm({...offerForm, salary: Number(e.target.value)})} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Housing (SAR)</label>
+                  <input type="number" value={offerForm.housing} onChange={e => setOfferForm({...offerForm, housing: Number(e.target.value)})} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Transport (SAR)</label>
+                  <input type="number" value={offerForm.transport} onChange={e => setOfferForm({...offerForm, transport: Number(e.target.value)})} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Anticipated Start Date</label>
+                  <input type="date" value={offerForm.start_date} onChange={e => setOfferForm({...offerForm, start_date: e.target.value})} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                </div>
+              </div>
+              <div className="bg-emerald-50 p-4 rounded-2xl flex justify-between items-center border border-emerald-100">
+                <span className="text-sm font-bold text-emerald-800">Total Package</span>
+                <span className="text-xl font-black text-emerald-600">SAR {(offerForm.salary + offerForm.housing + offerForm.transport).toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-100 flex gap-3 justify-end bg-gray-50">
+              <button onClick={() => setOfferDraft(null)} className="px-6 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-white transition-all">Cancel</button>
+              <button onClick={submitOffer} className="px-8 py-2 rounded-xl bg-violet-600 text-white text-sm font-black shadow-xl shadow-violet-200 hover:bg-violet-700 transition-all">Send Offer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* INTERVIEW DETAILS MODAL */}
       {selectedInterview && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
