@@ -97,6 +97,13 @@ export default function InterviewBuilder({ interviews, templates, onRefresh }: P
   const [newPosition, setNewPosition] = useState("");
   const [newStage, setNewStage] = useState("hr_screening");
   const [creating, setCreating] = useState(false);
+  const [offerDraft, setOfferDraft] = useState<Interview | null>(null);
+  const [offerForm, setOfferForm] = useState({ 
+    salary: 15000, 
+    housing: 3750, 
+    transport: 1500, 
+    start_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0] 
+  });
 
   const addQuestion = () => {
     setTplQuestions([...tplQuestions, { q: "", type: "Behavioral", time: 3 }]);
@@ -168,27 +175,41 @@ export default function InterviewBuilder({ interviews, templates, onRefresh }: P
     onRefresh();
   };
 
-  const handleMakeOffer = async (interview: Interview) => {
+  
+  const handleMakeOffer = (interview: Interview) => {
     if (!interview.application_id) {
-      alert("This interview is not linked to a job application.");
+      alert('This interview is not linked to a job application.');
       return;
     }
-    if (!confirm(`Create an offer for ${interview.candidate_name}?`)) return;
-    
-    await fetch("/api/admin?action=create_offer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        application_id: interview.application_id,
-        position: interview.position,
-        department: "General", // Default
-        offered_salary: 15000,
-        start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      }),
-    });
-    alert("Offer letter created!");
-    setSelectedInterview(null);
-    onRefresh();
+    setOfferDraft(interview);
+  };
+
+  const submitOffer = async () => {
+    if (!offerDraft) return;
+    try {
+      const res = await fetch('/api/admin?action=create_offer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: offerDraft.application_id,
+          position: offerDraft.position,
+          department: 'General',
+          offered_salary: offerForm.salary,
+          housing_allowance: offerForm.housing,
+          transport_allowance: offerForm.transport,
+          start_date: offerForm.start_date,
+          status: 'sent'
+        }),
+      });
+      if (res.ok) {
+        alert('Offer letter created and sent to candidate!');
+        setOfferDraft(null);
+        setSelectedInterview(null);
+        onRefresh();
+      }
+    } catch (err) {
+      alert('Failed to create offer');
+    }
   };
 
   const tabs = [
