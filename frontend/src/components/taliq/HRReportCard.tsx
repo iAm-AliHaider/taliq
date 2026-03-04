@@ -45,7 +45,7 @@ export function HRReportCard(props: Props) {
           <div className="space-y-4">
             <div>
               <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">By Department</p>
-              {props.(byDepartment || []).map(d => (
+              {(props.byDepartment || []).map(d => (
                 <div key={d.department} className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs text-gray-600 w-36 truncate">{d.department}</span>
                   <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
@@ -58,7 +58,7 @@ export function HRReportCard(props: Props) {
             <div>
               <p className="text-[10px] text-gray-400 uppercase font-semibold mb-2">By Nationality</p>
               <div className="flex flex-wrap gap-2">
-                {props.(byNationality || []).map(n => (
+                {(props.byNationality || []).map(n => (
                   <span key={n.nationality} className="px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium">{n.nationality}: {n.cnt}</span>
                 ))}
               </div>
@@ -72,7 +72,7 @@ export function HRReportCard(props: Props) {
               <p className="text-[10px] text-gray-500">Total Monthly Payroll</p>
             </div>
             <p className="text-[10px] text-gray-400 uppercase font-semibold">Cost by Department</p>
-            {props.(salaryByDept || []).map(d => (
+            {(props.salaryByDept || []).map(d => (
               <div key={d.department} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-700">{d.department}</span>
                 <span className="text-xs font-bold text-gray-900">{d.dept_cost?.toLocaleString()} SAR</span>

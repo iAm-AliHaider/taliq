@@ -100,7 +100,7 @@ export function ExamCard({ examId, examTitle, description, passingScore = 70, ti
 
           {/* Options */}
           <div className="space-y-2 ml-11">
-            {q.(options || []).map((opt, i) => {
+            {(q.options || []).map((opt, i) => {
               const selected = answers[String(q.id)] === opt;
               return (
                 <button key={i} onClick={() => setAnswers(prev => ({...prev, [String(q.id)]: opt}))}

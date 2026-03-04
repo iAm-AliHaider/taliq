@@ -140,7 +140,7 @@ export function InterviewResultsCard(props: Props) {
                 <h4 className="text-xs font-bold text-emerald-700 mb-2">Strengths</h4>
                 {(props.strengths || []).length > 0 ? (
                   <ul className="space-y-1">
-                    {props.(strengths || []).map((s, i) => (
+                    {(props.strengths || []).map((s, i) => (
                       <li key={i} className="text-[11px] text-emerald-600 flex items-start gap-1">
                         <span className="text-emerald-400 mt-0.5">+</span> {s}
                       </li>
@@ -154,7 +154,7 @@ export function InterviewResultsCard(props: Props) {
                 <h4 className="text-xs font-bold text-amber-700 mb-2">Areas to Improve</h4>
                 {(props.improvementAreas || []).length > 0 ? (
                   <ul className="space-y-1">
-                    {props.(improvementAreas || []).map((a, i) => (
+                    {(props.improvementAreas || []).map((a, i) => (
                       <li key={i} className="text-[11px] text-amber-600 flex items-start gap-1">
                         <span className="text-amber-400 mt-0.5">-</span> {a}
                       </li>
@@ -204,7 +204,7 @@ export function InterviewResultsCard(props: Props) {
                 </div>
                 {q.strengths?.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {q.(strengths || []).map((s, j) => (
+                    {(q.strengths || []).map((s, j) => (
                       <span key={j} className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[9px]">+{s}</span>
                     ))}
                   </div>

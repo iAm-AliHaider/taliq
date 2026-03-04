@@ -2,12 +2,20 @@ import json
 import logging
 import datetime
 import asyncio
-from livekit.agents import FunctionDomain, function_tool
-from .core import _send_ui, _room_ref, _query, get_db
+from livekit.agents import function_tool
+from .core import _send_ui, get_room_ref
+from database import get_db
 
-logger = logging.getLogger('taliq-tools-interview')
+def _query(sql, params=None, fetch=False):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, params or ())
+        if fetch:
+            columns = [desc[0] for desc in cur.description]
+            return [dict(zip(columns, row)) for row in cur.fetchall()]
+        conn.commit()
+        return None
 
-# Global state for candidate interview session
 _interview_state = {
     "started": False,
     "completed": False,
@@ -29,10 +37,10 @@ _interview_state = {
 async def _delayed_disconnect(delay=10):
     """Wait for TTS to finish then disconnect."""
     await asyncio.sleep(delay)
-    if _room_ref:
+    if get_room_ref():
         logger.info("Automatically disconnecting interview call...")
         try:
-            await _room_ref.disconnect()
+            await get_room_ref().disconnect()
         except Exception as e:
             logger.error(f"Disconnect error: {e}")
 
@@ -44,7 +52,7 @@ def get_candidate_interview_domain():
     domain.add_tool(complete_candidate_interview)
     return domain
 
-@function_tool()
+@function_tool
 async def start_candidate_interview(
     application_id: int,
     candidate_name: str,
@@ -111,7 +119,7 @@ async def start_candidate_interview(
         "Instructions for AI: Introduce yourself, explain the process, and then call next_interview_question to begin."
     )
 
-@function_tool()
+@function_tool
 async def next_interview_question():
     """Move to the next interview question."""
     global _interview_state
@@ -138,7 +146,7 @@ async def next_interview_question():
 
     return f"Question {idx + 1} of {len(questions)}: {q['question']}"
 
-@function_tool()
+@function_tool
 async def score_candidate_answer(
     communication_score: int = 5,
     relevance_score: int = 5,
@@ -189,7 +197,7 @@ async def score_candidate_answer(
     
     return f"Scored the final question: {avg_score}/10. All questions done. Call complete_candidate_interview to finish."
 
-@function_tool()
+@function_tool
 async def complete_candidate_interview():
     """Complete the interview, calculate final score, and save results."""
     global _interview_state

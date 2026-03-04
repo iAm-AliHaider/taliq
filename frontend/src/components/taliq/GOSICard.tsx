@@ -221,7 +221,7 @@ export function GOSICard({
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">Coverage</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {benefits.(coverage || []).map(c => (
+                  {(benefits.coverage || []).map(c => (
                     <span key={c} className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-100 text-[10px] text-emerald-700 font-medium">{c}</span>
                   ))}
                 </div>

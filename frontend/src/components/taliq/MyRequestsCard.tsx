@@ -68,7 +68,7 @@ export default function MyRequestsCard(props: Props) {
       </div>
 
       <div className="p-4 max-h-72 overflow-y-auto space-y-2">
-        {tab === "leave" && props.(leaveRequests || []).map(r => (
+        {tab === "leave" && (props.leaveRequests || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-900 capitalize">{r.type} Leave</p>
@@ -81,7 +81,7 @@ export default function MyRequestsCard(props: Props) {
           </div>
         ))}
 
-        {tab === "loan" && props.(loans || []).map(r => (
+        {tab === "loan" && (props.loans || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-900">{r.type}</p>
@@ -94,7 +94,7 @@ export default function MyRequestsCard(props: Props) {
           </div>
         ))}
 
-        {tab === "doc" && props.(documents || []).map(r => (
+        {tab === "doc" && (props.documents || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <p className="text-sm font-medium text-gray-900">{r.type}</p>
             <div className="text-right">
@@ -104,7 +104,7 @@ export default function MyRequestsCard(props: Props) {
           </div>
         ))}
 
-        {tab === "travel" && props.(travel || []).map(r => (
+        {tab === "travel" && (props.travel || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-900">To {r.destination}</p>
@@ -117,7 +117,7 @@ export default function MyRequestsCard(props: Props) {
           </div>
         ))}
 
-        {tab === "grievance" && props.(grievances || []).map(r => (
+        {tab === "grievance" && (props.grievances || []).map(r => (
           <div key={r.ref} className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
             <p className="text-sm font-medium text-gray-900">{r.subject}</p>
             <div className="text-right">

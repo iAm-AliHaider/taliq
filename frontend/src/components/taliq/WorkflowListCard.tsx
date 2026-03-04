@@ -39,7 +39,7 @@ export function WorkflowListCard({ workflows }: { workflows: Workflow[] }) {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              {w.(steps || []).map((s, i) => (
+              {(w.steps || []).map((s, i) => (
                 <div key={i} className="flex items-center">
                   <div className="px-2 py-1 rounded-lg bg-gray-50 border border-gray-200">
                     <p className="text-[9px] font-semibold text-gray-700">{s.label}</p>
