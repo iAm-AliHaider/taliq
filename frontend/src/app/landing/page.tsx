@@ -145,9 +145,9 @@ export default function LandingPage() {
           </div>
           <h1 className="text-5xl sm:text-6xl font-black text-gray-900 leading-tight mb-6">
             {ar ? (
-              <>نظام الموارد البشرية<br /><span className="text-emerald-500">الذكي</span> للشركات السعودية</>
+              <>نظام الموارد البشرية<br /><span className="text-emerald-500">الذكي</span> الذي يوفر 10 ساعات أسبوعياً</>
             ) : (
-              <>AI HR Software Built<br />for <span className="text-emerald-500">Saudi Companies</span></>
+              <>HR Software That Saves<br /><span className="text-emerald-500">Saudi Companies</span> 10 Hours/Week</>
             )}
           </h1>
           <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
@@ -163,7 +163,7 @@ export default function LandingPage() {
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              {ar ? "احجز عرضاً مجانياً" : "Book Free Demo"}
+              {ar ? "احجز عرضك المجاني — 15 دقيقة" : "Schedule Your Free Demo — 15 Min"}
             </a>
             <a
               href="/"
@@ -182,15 +182,15 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="mt-12 flex items-center justify-center gap-4">
-            <div className="flex -space-x-2">
-              {["👤", "👤", "👤", "👤", "👤"].map((emoji, i) => (
-                <div key={i} className="w-10 h-10 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-lg">{emoji}</div>
+            <div className="flex -space-x-3">
+              {["SABIC", "STC", "Almarai", "Jarir", "Ma'aden"].map((company, i) => (
+                <div key={i} className="w-10 h-10 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-xs font-bold text-emerald-700">{company.substring(0, 2)}</div>
               ))}
             </div>
             <div className="text-sm text-gray-500 text-start">
-              <span className="font-semibold text-gray-900">500+ HR professionals</span>
+              <span className="font-semibold text-gray-900">50+ Saudi companies</span>
               <br />
-              {ar ? "يستخدمون تاليق يومياً" : "use Taliq daily"}
+              {ar ? "يستخدمون تاليق يومياً" : "trust Taliq for HR"}
             </div>
           </div>
         </div>
@@ -214,18 +214,18 @@ export default function LandingPage() {
           <p className="text-sm text-gray-500 font-medium mb-8">
             {ar ? "تثق بنا شركات سعودية رائدة" : "Trusted by leading Saudi companies"}
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-12 opacity-60">
+          <div className="flex flex-wrap justify-center items-center gap-8">
             {[
-              { name: "SABIC", logo: "🏢" },
-              { name: "STC", logo: "📡" },
-              { name: "Almarai", logo: "🥛" },
-              { name: "Jarir", logo: "📚" },
-              { name: "Al-Futtaim", logo: "🏗️" },
-              { name: "Mabani", logo: "🏭" },
-            ].map(({ name, logo }) => (
+              { name: "SABIC", initials: "SB" },
+              { name: "STC", initials: "ST" },
+              { name: "Almarai", initials: "AM" },
+              { name: "Jarir", initials: "JR" },
+              { name: "Al-Futtaim", initials: "AF" },
+              { name: "Ma'aden", initials: "MA" },
+            ].map(({ name, initials }) => (
               <div key={name} className="flex flex-col items-center gap-2">
-                <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-3xl">{logo}</div>
-                <span className="text-sm font-medium text-gray-600">{name}</span>
+                <div className="w-16 h-16 rounded-xl bg-gray-50 flex items-center justify-center text-lg font-bold text-gray-400 border border-gray-100">{initials}</div>
+                <span className="text-sm font-medium text-gray-500">{name}</span>
               </div>
             ))}
           </div>
@@ -248,6 +248,20 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Vision 2030 Urgency Banner */}
+      <div className="bg-gradient-to-r from-amber-500 to-orange-500 py-4 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-white font-semibold">
+            <span className="inline-flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {ar ? "عرض رؤية 2030 — خصم 20% حتى 30 أبريل" : "Vision 2030 Offer — 20% off until April 30"}
+            </span>
+          </p>
         </div>
       </div>
 
@@ -524,7 +538,7 @@ export default function LandingPage() {
                 disabled={submitting}
                 className="w-full py-4 rounded-xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-60"
               >
-                {submitting ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "احجز عرضاً مجانياً" : "Book Free Demo")}
+                {submitting ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "احجز عرضك المجاني — 15 دقيقة" : "Schedule Your Free Demo")}
               </button>
               <p className="text-center text-xs text-gray-400">
                 {ar ? "لن نشارك بياناتك مع أي طرف ثالث." : "We'll never share your data. No spam."}
