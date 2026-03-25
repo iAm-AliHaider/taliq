@@ -122,10 +122,10 @@ export default function LandingPage() {
               {ar ? "English" : "العربية"}
             </button>
             <a
-              href="#demo"
+              href="/checkout?plan=growth"
               className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600 transition-all shadow-sm shadow-emerald-500/20"
             >
-              {ar ? "احجز عرضاً" : "Book Demo"}
+              {ar ? "اشترك الآن" : "Subscribe Now"}
             </a>
             <a href="/" className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:border-emerald-300 transition-all font-medium hidden sm:block">
               {ar ? "تسجيل الدخول" : "Login"}
@@ -157,19 +157,19 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href="#demo"
+              href="/checkout?plan=growth"
               className="px-8 py-4 rounded-2xl bg-emerald-500 text-white font-bold text-lg hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/25 flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              {ar ? "احجز عرضك المجاني — 15 دقيقة" : "Schedule Your Free Demo — 15 Min"}
+              {ar ? "اشترك الآن — ابدأ مجاناً" : "Subscribe Now — Start Free"}
             </a>
             <a
-              href="/"
+              href="/checkout?plan=starter"
               className="px-8 py-4 rounded-2xl border-2 border-gray-200 text-gray-700 font-bold text-lg hover:border-emerald-300 hover:text-emerald-700 transition-all"
             >
-              {ar ? "تجربة المنصة" : "Try the Platform"}
+              {ar ? "ابدأ بتخطيط المبتدئ" : "Start with Starter Plan"}
             </a>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-6 mt-10 text-sm text-gray-400">
@@ -325,7 +325,7 @@ export default function LandingPage() {
             </div>
           </div>
           <p className="mt-6 text-sm text-gray-500">
-            {ar ? "أو" : "Or"} <a href="#demo" className="text-emerald-600 font-semibold hover:underline">{ar ? "احجز عرضاً شخصياً" : "book a personalized demo"}</a>
+            {ar ? "أو" : "Or"} <a href="/checkout?plan=starter" className="text-emerald-600 font-semibold hover:underline">{ar ? "اشترك في الباقة المبتدئة" : "subscribe to Starter plan"}</a>
           </p>
         </div>
       </section>
@@ -384,7 +384,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <a
-                  href="#demo"
+                  href={plan.price === "Custom" ? "mailto:hello@middlemind.ai" : plan.price === "299" ? "/checkout?plan=starter" : "/checkout?plan=growth"}
                   className={`w-full py-3 rounded-xl text-sm font-bold text-center transition-all ${
                     plan.highlight
                       ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
